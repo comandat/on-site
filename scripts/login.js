@@ -1,7 +1,7 @@
 document.addEventListener('DOMContentLoaded', () => {
     // Redirectioneaza daca utilizatorul este deja logat
     if (sessionStorage.getItem('isLoggedIn') === 'true') {
-        window.location.href = 'index.html';
+        window.location.href = 'main.html';
         return;
     }
 
@@ -45,7 +45,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 // Verificam raspunsul de la webhook.
                 if (data && data.status === 'success') {
                     sessionStorage.setItem('isLoggedIn', 'true');
-                    window.location.href = 'index.html';
+                    window.location.href = 'main.html';
                 } else {
                     errorMessage.textContent = 'Cod de acces invalid sau expirat.';
                 }
