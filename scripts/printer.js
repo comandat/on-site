@@ -1,4 +1,4 @@
-// --- CODUL FINAL DE IMPRIMARE ---
+// --- COD FINAL DE IMPRIMARE (FĂRĂ FILTRARE) ---
 
 const connectBtn = document.getElementById('connect-btn');
 const printBtn = document.getElementById('print-btn');
@@ -10,7 +10,6 @@ const connectionText = document.getElementById('connection-text');
 let niimbotCharacteristic = null;
 
 // --- ADRESELE BLUETOOTH DESCOPERITE ---
-// Am introdus aici UUID-urile pe care le-ai găsit.
 const SERVICE_UUID_1 = '49535343-fe7d-4ae5-8fa9-9fafd205e455';
 const SERVICE_UUID_2 = 'e7810a71-73ae-499d-8c15-faa9aef0c3f2';
 
@@ -49,12 +48,15 @@ async function connectToPrinter() {
         return;
     }
     try {
-        statusP.textContent = 'Se caută imprimanta...';
+        statusP.textContent = 'Se caută dispozitive...';
         
-        // Acum filtrăm direct după serviciul corect, ceea ce va afișa doar imprimanta.
+        // --- MODIFICARE AICI ---
+        // Am eliminat filtrul pentru a afișa toate dispozitivele
         const device = await navigator.bluetooth.requestDevice({
-            filters: [{ services: [SERVICE_UUID_DE_FOLOSIT] }]
+            acceptAllDevices: true,
+            optionalServices: [SERVICE_UUID_DE_FOLOSIT]
         });
+        // --- SFÂRȘIT MODIFICARE ---
         
         statusP.textContent = `Conectare la ${device.name || 'dispozitiv necunoscut'}...`;
         const server = await device.gatt.connect();
@@ -62,7 +64,9 @@ async function connectToPrinter() {
         statusP.textContent = 'Se caută serviciul de imprimare...';
         const service = await server.getPrimaryService(SERVICE_UUID_DE_FOLOSIT);
         if (!service) {
-            statusP.textContent = 'Eroare critică: Serviciul a dispărut după conectare.';
+            statusP.textContent = 'Eroare: Serviciul necesar nu a fost găsit pe acest dispozitiv.';
+            alert('Serviciul necesar nu a fost găsit. Asigură-te că ai selectat imprimanta corectă.');
+            server.disconnect();
             return;
         }
         
@@ -71,7 +75,7 @@ async function connectToPrinter() {
         if (!niimbotCharacteristic) {
             statusP.textContent = 'Eroare: Caracteristica necesară nu a fost găsită.';
             alert('Am găsit serviciul, dar caracteristica pentru imprimare lipsește. Încearcă Planul B din instrucțiuni.');
-            server.disconnect(); // Ne deconectăm dacă nu găsim tot ce trebuie
+            server.disconnect();
             return;
         }
         
