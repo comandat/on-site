@@ -8,6 +8,11 @@ const connectionText = document.getElementById('connection-text');
 
 let niimbotCharacteristic = null;
 
+// ID-urile Bluetooth complete și corecte
+const NIIMBOT_SERVICE_UUID = '000018f0-0000-1000-8000-00805f9b34fb';
+const NIIMBOT_CHARACTERISTIC_UUID = '00002af1-0000-1000-8000-00805f9b34fb';
+
+
 function createNiimbotPacket(type, data) {
     const dataBytes = Array.isArray(data) ? data : [data];
     const checksum = dataBytes.reduce((acc, byte) => acc ^ byte, type ^ dataBytes.length);
@@ -30,7 +35,6 @@ function createTextImage(text, width, height) {
     return canvas;
 }
 
-// --- FUNCȚIA CONNECTTOPRINTER A FOST MODIFICATĂ ---
 async function connectToPrinter() {
     if (niimbotCharacteristic) {
         statusP.textContent = "Deja conectat.";
@@ -39,33 +43,32 @@ async function connectToPrinter() {
     try {
         statusP.textContent = 'Se caută dispozitive...';
 
+        // --- MODIFICARE AICI: Am revenit la ID-ul complet pentru serviciu ---
         const device = await navigator.bluetooth.requestDevice({
             acceptAllDevices: true,
-            optionalServices: [0x18f0]
+            optionalServices: [NIIMBOT_SERVICE_UUID]
         });
+        // --- SFÂRȘIT MODIFICARE ---
 
         statusP.textContent = `Conectare la ${device.name || 'dispozitiv necunoscut'}...`;
         const server = await device.gatt.connect();
-
-        // --- VERIFICARE 1: Găsim serviciul corect? ---
+        
         statusP.textContent = 'Se caută serviciul de imprimare...';
-        const service = await server.getPrimaryService(0x18f0);
+        const service = await server.getPrimaryService(NIIMBOT_SERVICE_UUID);
         if (!service) {
             statusP.textContent = 'Eroare: Serviciul necesar nu a fost găsit pe acest dispozitiv.';
             alert('Acesta nu pare a fi o imprimantă NIIMBOT. Serviciul Bluetooth necesar lipsește.');
             return;
         }
         
-        // --- VERIFICARE 2: Găsim caracteristica corectă? ---
         statusP.textContent = 'Se caută caracteristica de scriere...';
-        niimbotCharacteristic = await service.getCharacteristic(0x2af1);
+        niimbotCharacteristic = await service.getCharacteristic(NIIMBOT_CHARACTERISTIC_UUID);
         if (!niimbotCharacteristic) {
             statusP.textContent = 'Eroare: Caracteristica necesară nu a fost găsită pe acest dispozitiv.';
             alert('Acesta nu pare a fi o imprimantă NIIMBOT. Caracteristica Bluetooth necesară lipsește.');
             return;
         }
         
-        // Dacă am trecut de ambele verificări, totul este în regulă
         statusP.textContent = `Conectat la ${device.name}. Gata de imprimare.`;
         connectionDot.classList.remove('bg-gray-400');
         connectionDot.classList.add('bg-green-500');
