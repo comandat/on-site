@@ -39,10 +39,10 @@ async function connectToPrinter() {
         statusP.textContent = 'Se caută imprimante...';
 
         // --- MODIFICARE AICI ---
-        // Înlocuiește 'NUME_IMPRIMANTA_AICI' cu numele exact al imprimantei tale (ex: 'B21').
+        // Caută toate dispozitivele al căror nume începe cu "D".
         const device = await navigator.bluetooth.requestDevice({
-            filters: [{ name: 'NUME_IMPRIMANTA_AICI' }],
-            optionalServices: ['0x18f0'] // prescurtare pentru UUID-ul complet
+            filters: [{ namePrefix: 'D' }], // <-- Schimbat din 'name' în 'namePrefix'
+            optionalServices: [0x18f0]
         });
         // --- SFÂRȘIT MODIFICARE ---
 
@@ -52,7 +52,7 @@ async function connectToPrinter() {
         niimbotCharacteristic = await service.getCharacteristic(0x2af1);
         
         statusP.textContent = `Conectat la ${device.name}. Gata de imprimare.`;
-        connectionDot.classList.remove('bg-gray-400');
+        connectionDot.classList.remove('bg-ray-400');
         connectionDot.classList.add('bg-green-500');
         connectionText.textContent = 'Conectat';
         printBtn.disabled = false;
