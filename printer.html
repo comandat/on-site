@@ -8,6 +8,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet"/>
     <style>
         .dot { height: 10px; width: 10px; border-radius: 50%; display: inline-block; }
+        #status { white-space: pre-wrap; /* Permite afișarea corectă a liniilor noi */ }
     </style>
 </head>
 <body class="bg-gray-100 flex items-center justify-center min-h-screen">
@@ -18,28 +19,13 @@
         <h1 class="text-2xl font-bold text-gray-800 mt-2">
             Control Imprimantă <span id="script-version" class="text-sm font-normal text-gray-400"></span>
         </h1>
-        <p id="status" class="text-gray-500 mt-1">Conectează-te pentru a putea imprima.</p>
+        <p id="status" class="text-gray-500 mt-1 text-left bg-gray-100 p-3 rounded-lg">Așteptare comandă...</p>
     </div>
 
     <div class="mt-6">
         <button id="connect-btn" class="w-full flex items-center justify-center gap-2 rounded-lg bg-blue-600 py-3 text-base font-bold text-white shadow-md hover:bg-blue-700">
             <span class="material-symbols-outlined">bluetooth_searching</span>
-            Conectare la Imprimantă
-        </button>
-        <div class="mt-2 flex items-center justify-center gap-2">
-            <span id="connection-dot" class="dot bg-gray-400"></span>
-            <span id="connection-text" class="text-xs text-gray-500">Deconectat</span>
-        </div>
-    </div>
-
-    <hr class="my-6 border-gray-200">
-
-    <div>
-        <label for="print-text-input" class="block text-sm font-medium text-gray-700">Text de imprimat:</label>
-        <input type="text" id="print-text-input" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm" placeholder="ex: PROD-001">
-        
-        <button id="print-btn" class="mt-4 w-full rounded-lg bg-gray-300 py-3 text-base font-bold text-white cursor-not-allowed" disabled>
-            Imprimă Eticheta
+            Pornește Scanarea Finală
         </button>
     </div>
     
