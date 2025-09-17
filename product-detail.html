@@ -60,10 +60,11 @@
     </main>
     <footer class="fixed bottom-0 left-0 right-0 bg-white/80 backdrop-blur-sm z-10 border-t border-gray-200">
         <div class="mx-auto max-w-md p-4">
-            <button id="open-stock-modal-button" class="w-full rounded-lg bg-[var(--primary-color)] py-3 text-base font-bold text-white shadow-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"> Adaugă în Stoc </button>
-            <div class="mt-2 flex items-center justify-center gap-1.5">
-                <div class="size-2 rounded-full bg-green-500"></div>
-                <span class="text-xs text-gray-500">Imprimantă conectată</span>
+            <div class="flex gap-3">
+                <button id="open-stock-modal-button" class="w-full rounded-lg bg-[var(--primary-color)] py-3 text-base font-bold text-white shadow-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"> Adaugă în Stoc </button>
+                <button id="go-to-print-button" class="w-auto flex-shrink-0 px-4 rounded-lg bg-gray-700 text-white shadow-md hover:bg-gray-800">
+                    <span class="material-symbols-outlined">print</span>
+                </button>
             </div>
         </div>
         <div class="border-t border-gray-200 bg-white">
@@ -85,62 +86,16 @@
     </footer>
 </div>
 
-<!-- Modals and Overlays -->
 <div id="stock-modal" class="fixed inset-0 z-50 hidden" style='font-family: Inter, "Noto Sans", sans-serif;'>
-    <div id="stock-modal-backdrop" class="absolute inset-0 bg-black bg-opacity-50 backdrop-blur-sm"></div>
-    <div id="stock-modal-panel" class="absolute bottom-0 left-0 right-0 w-full max-w-md mx-auto bg-gray-100 rounded-t-3xl shadow-lg">
-        <div class="p-4">
-            <div class="mx-auto h-1.5 w-12 rounded-full bg-gray-300 mb-4"></div>
-            <h2 class="text-center text-lg font-bold text-gray-800 mb-4">Adaugă Produse în Stoc</h2>
-            <div class="space-y-3 bg-white p-4 rounded-xl border border-gray-200">
-                <div data-condition="new" class="flex justify-between items-center"><span class="font-medium text-gray-800 text-lg">Ca Nou</span><div class="flex items-center gap-4"><button data-action="decrement" class="tap-highlight-transparent modal-button rounded-full text-gray-400 hover:text-gray-600"><span class="material-symbols-outlined text-2xl">remove_circle</span></button><span class="modal-count-display w-8 text-center text-xl font-bold text-gray-900">0</span><button data-action="increment" class="tap-highlight-transparent modal-button rounded-full text-[var(--primary-color)] hover:text-blue-700"><span class="material-symbols-outlined text-2xl">add_circle</span></button></div></div> <hr class="my-2 border-gray-100"/>
-                <div data-condition="very-good" class="flex justify-between items-center"><span class="font-medium text-gray-800 text-lg">Foarte Bun</span><div class="flex items-center gap-4"><button data-action="decrement" class="tap-highlight-transparent modal-button rounded-full text-gray-400 hover:text-gray-600"><span class="material-symbols-outlined text-2xl">remove_circle</span></button><span class="modal-count-display w-8 text-center text-xl font-bold text-gray-900">0</span><button data-action="increment" class="tap-highlight-transparent modal-button rounded-full text-[var(--primary-color)] hover:text-blue-700"><span class="material-symbols-outlined text-2xl">add_circle</span></button></div></div> <hr class="my-2 border-gray-100"/>
-                <div data-condition="good" class="flex justify-between items-center"><span class="font-medium text-gray-800 text-lg">Bun</span><div class="flex items-center gap-4"><button data-action="decrement" class="tap-highlight-transparent modal-button rounded-full text-gray-400 hover:text-gray-600"><span class="material-symbols-outlined text-2xl">remove_circle</span></button><span class="modal-count-display w-8 text-center text-xl font-bold text-gray-900">0</span><button data-action="increment" class="tap-highlight-transparent modal-button rounded-full text-[var(--primary-color)] hover:text-blue-700"><span class="material-symbols-outlined text-2xl">add_circle</span></button></div></div>
-            </div>
-            <div data-condition="broken" class="flex justify-between items-center p-4 mt-3 bg-red-50/80 rounded-xl border border-red-200"><span class="font-medium text-red-700 text-lg">Stricat</span><div class="flex items-center gap-4"><button data-action="decrement" class="tap-highlight-transparent modal-button rounded-full text-gray-400 hover:text-red-600"><span class="material-symbols-outlined text-2xl">remove_circle</span></button><span class="modal-count-display w-8 text-center text-xl font-bold text-red-800">0</span><button data-action="increment" class="tap-highlight-transparent modal-button rounded-full text-red-600 hover:text-red-800"><span class="material-symbols-outlined text-2xl">add_circle</span></button></div></div>
-            <div class="mt-4 flex gap-3"> <button id="cancel-stock-button" class="w-full rounded-lg bg-gray-200 py-3 text-base font-bold text-gray-700">Anulează</button> <button id="confirm-stock-button" class="w-full rounded-lg bg-[var(--primary-color)] py-3 text-base font-bold text-white shadow-md">Confirmă</button> </div>
-        </div>
     </div>
-</div>
 <div id="edit-stock-modal" class="fixed inset-0 z-50 hidden" style='font-family: Inter, "Noto Sans", sans-serif;'>
-    <div id="edit-stock-modal-backdrop" class="absolute inset-0 bg-black bg-opacity-50 backdrop-blur-sm"></div>
-    <div id="edit-stock-modal-panel" class="absolute bottom-0 left-0 right-0 w-full max-w-md mx-auto bg-gray-100 rounded-t-3xl shadow-lg">
-        <div class="p-4">
-            <div class="mx-auto h-1.5 w-12 rounded-full bg-gray-300 mb-4"></div>
-            <h2 class="text-center text-lg font-bold text-gray-800 mb-4">Șterge Produse din Stoc</h2>
-            <div class="space-y-3 bg-white p-4 rounded-xl border border-gray-200">
-                <div data-condition="new" class="flex justify-between items-center"><span class="font-medium text-gray-800 text-lg">Ca Nou</span><div class="flex items-center gap-4"><button data-action="decrement" class="tap-highlight-transparent modal-button rounded-full text-gray-400 hover:text-gray-600"><span class="material-symbols-outlined text-2xl">remove_circle</span></button><span class="edit-modal-count-display w-8 text-center text-xl font-bold text-gray-900">0</span></div></div><hr class="my-2 border-gray-100"/>
-                <div data-condition="very-good" class="flex justify-between items-center"><span class="font-medium text-gray-800 text-lg">Foarte Bun</span><div class="flex items-center gap-4"><button data-action="decrement" class="tap-highlight-transparent modal-button rounded-full text-gray-400 hover:text-gray-600"><span class="material-symbols-outlined text-2xl">remove_circle</span></button><span class="edit-modal-count-display w-8 text-center text-xl font-bold text-gray-900">0</span></div></div><hr class="my-2 border-gray-100"/>
-                <div data-condition="good" class="flex justify-between items-center"><span class="font-medium text-gray-800 text-lg">Bun</span><div class="flex items-center gap-4"><button data-action="decrement" class="tap-highlight-transparent modal-button rounded-full text-gray-400 hover:text-gray-600"><span class="material-symbols-outlined text-2xl">remove_circle</span></button><span class="edit-modal-count-display w-8 text-center text-xl font-bold text-gray-900">0</span></div></div>
-            </div>
-            <div data-condition="broken" class="flex justify-between items-center p-4 mt-3 bg-red-50/80 rounded-xl border border-red-200"><span class="font-medium text-red-700 text-lg">Stricat</span><div class="flex items-center gap-4"><button data-action="decrement" class="tap-highlight-transparent modal-button rounded-full text-gray-400 hover:text-red-600"><span class="material-symbols-outlined text-2xl">remove_circle</span></button><span class="edit-modal-count-display w-8 text-center text-xl font-bold text-red-800">0</span></div></div>
-            <div class="mt-4 flex gap-3"><button id="cancel-edit-stock-button" class="w-full rounded-lg bg-gray-200 py-3 text-base font-bold text-gray-700">Anulează</button><button id="confirm-edit-stock-button" class="w-full rounded-lg bg-red-600 py-3 text-base font-bold text-white shadow-md">Confirmă Ștergerea</button></div>
-        </div>
     </div>
-</div>
-
 <div id="search-overlay" class="fixed inset-0 z-30 hidden">
-  <div id="search-backdrop" class="absolute inset-0 bg-black bg-opacity-70 backdrop-blur-sm"></div>
-  <div class="relative z-10 w-full max-w-md mx-auto">
-      <div class="absolute top-4 left-4 right-4 flex items-center justify-end">
-          <div id="search-bar-container" class="flex items-center h-10 bg-white rounded-full shadow-lg transition-all duration-500 ease-in-out w-10 opacity-0">
-              <input id="search-input" type="text" class="w-full h-full bg-transparent border-0 pl-4 pr-2 text-gray-800 placeholder-gray-500" placeholder="Căutați produse...">
-              <button id="cancel-search-button" class="mr-2 text-gray-500"><span class="material-symbols-outlined">close</span></button>
-          </div>
-      </div>
-      <div id="search-results" class="absolute top-20 left-4 right-4 bg-white rounded-2xl shadow-lg p-2 opacity-0 transform -translate-y-4">
-        <div id="search-results-list" class="divide-y divide-gray-100 max-h-[60vh] overflow-y-auto">
-            <!-- Search results appear here -->
-        </div>
-        <div id="no-results-message" class="hidden p-4 text-center text-gray-500">Nu exista</div>
     </div>
-  </div>
-</div>
 
-<!-- Scripts -->
 <script src="scripts/data.js" type="module"></script>
 <script src="scripts/product-detail.js" type="module"></script>
+<script src="scripts/printer-redirect.js" type="module"></script>
 
 </body>
 </html>
-
