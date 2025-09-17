@@ -8,11 +8,15 @@ const connectionText = document.getElementById('connection-text');
 
 let niimbotCharacteristic = null;
 
-// --- AICI VOM INTRODUCE ADRESELE CORECTE ---
-// Vom înlocui acest UUID cu cel pe care l-ai găsit tu
-const NIIMBOT_SERVICE_UUID = 'UUID_SERVICIU_DE_LA_TINE'; 
+// --- ADRESELE BLUETOOTH DESCOPERITE ---
+// Am introdus aici UUID-urile pe care le-ai găsit.
+const SERVICE_UUID_1 = '49535343-fe7d-4ae5-8fa9-9fafd205e455';
+const SERVICE_UUID_2 = 'e7810a71-73ae-499d-8c15-faa9aef0c3f2';
 
-// Adesea, caracteristica are aceeași bază, dar se termină în '2af1'. Vom testa cu aceasta.
+// !!! Încearcă mai întâi cu SERVICE_UUID_1. Dacă nu merge, schimbă aici în SERVICE_UUID_2 !!!
+const SERVICE_UUID_DE_FOLOSIT = SERVICE_UUID_1; 
+
+// Acesta este UUID-ul standard pentru caracteristica de scriere la majoritatea modelelor NIIMBOT
 const NIIMBOT_CHARACTERISTIC_UUID = '00002af1-0000-1000-8000-00805f9b34fb';
 
 
@@ -44,18 +48,18 @@ async function connectToPrinter() {
         return;
     }
     try {
-        statusP.textContent = 'Se caută imprimante...';
+        statusP.textContent = 'Se caută imprimanta...';
         
+        // Acum filtrăm direct după serviciul corect, ceea ce va afișa doar imprimanta.
         const device = await navigator.bluetooth.requestDevice({
-            // Vom filtra direct după serviciul corect, acum că îl știm
-            filters: [{ services: [NIIMBOT_SERVICE_UUID] }]
+            filters: [{ services: [SERVICE_UUID_DE_FOLOSIT] }]
         });
         
         statusP.textContent = `Conectare la ${device.name || 'dispozitiv necunoscut'}...`;
         const server = await device.gatt.connect();
         
         statusP.textContent = 'Se caută serviciul de imprimare...';
-        const service = await server.getPrimaryService(NIIMBOT_SERVICE_UUID);
+        const service = await server.getPrimaryService(SERVICE_UUID_DE_FOLOSIT);
         if (!service) {
             statusP.textContent = 'Eroare critică: Serviciul a dispărut după conectare.';
             return;
@@ -65,7 +69,7 @@ async function connectToPrinter() {
         niimbotCharacteristic = await service.getCharacteristic(NIIMBOT_CHARACTERISTIC_UUID);
         if (!niimbotCharacteristic) {
             statusP.textContent = 'Eroare: Caracteristica necesară nu a fost găsită.';
-            alert('Am găsit serviciul, dar caracteristica pentru imprimare lipsește.');
+            alert('Am găsit serviciul, dar caracteristica pentru imprimare lipsește. Încearcă cealaltă opțiune de UUID din fișier.');
             return;
         }
         
