@@ -1,157 +1,67 @@
-// --- COD FINAL DE IMPRIMARE (FĂRĂ FILTRARE) - v1 ---
+// --- COD DE DIAGNOSTICARE FINAL (v2) - GĂSEȘTE CARACTERISTICILE ---
 
 const connectBtn = document.getElementById('connect-btn');
-const printBtn = document.getElementById('print-btn');
-const textInput = document.getElementById('print-text-input');
 const statusP = document.getElementById('status');
-const connectionDot = document.getElementById('connection-dot');
-const connectionText = document.getElementById('connection-text');
 
-let niimbotCharacteristic = null;
+// Folosim UUID-ul de Serviciu pe care l-am confirmat că este corect
+const CORRECT_SERVICE_UUID = '49535343-fe7d-4ae5-8fa9-9fafd205e455';
 
-// --- ADRESELE BLUETOOTH DESCOPERITE ---
-const SERVICE_UUID_1 = '49535343-fe7d-4ae5-8fa9-9fafd205e455';
-const SERVICE_UUID_2 = 'e7810a71-73ae-499d-8c15-faa9aef0c3f2';
-
-// !!! Încearcă mai întâi cu SERVICE_UUID_1. Dacă nu merge, schimbă aici în SERVICE_UUID_2 !!!
-const SERVICE_UUID_DE_FOLOSIT = SERVICE_UUID_1; 
-
-// Acesta este UUID-ul standard pentru caracteristica de scriere la majoritatea modelelor NIIMBOT
-const NIIMBOT_CHARACTERISTIC_UUID = '00002af1-0000-1000-8000-00805f9b34fb';
-
-
-function createNiimbotPacket(type, data) {
-    const dataBytes = Array.isArray(data) ? data : [data];
-    const checksum = dataBytes.reduce((acc, byte) => acc ^ byte, type ^ dataBytes.length);
-    const packet = [0x55, 0x55, type, dataBytes.length, ...dataBytes, checksum, 0xAA, 0xAA];
-    return new Uint8Array(packet);
-}
-
-function createTextImage(text, width, height) {
-    const canvas = document.createElement('canvas');
-    canvas.width = width;
-    canvas.height = height;
-    const ctx = canvas.getContext('2d');
-    ctx.fillStyle = 'white';
-    ctx.fillRect(0, 0, width, height);
-    ctx.fillStyle = 'black';
-    ctx.font = 'bold 60px Arial';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(text, width / 2, height / 2);
-    return canvas;
-}
-
-async function connectToPrinter() {
-    if (niimbotCharacteristic) {
-        statusP.textContent = "Deja conectat.";
-        return;
-    }
+async function discoverCharacteristics() {
     try {
-        statusP.textContent = 'Se caută dispozitive...';
+        statusP.textContent = "Pas 1: Se caută imprimanta cu serviciul corect...";
         
+        // Căutăm direct imprimanta care are serviciul confirmat
         const device = await navigator.bluetooth.requestDevice({
-            acceptAllDevices: true,
-            optionalServices: [SERVICE_UUID_DE_FOLOSIT]
+            filters: [{ services: [CORRECT_SERVICE_UUID] }]
         });
-        
-        statusP.textContent = `Conectare la ${device.name || 'dispozitiv necunoscut'}...`;
+
+        statusP.textContent = `Pas 2: Dispozitiv găsit: ${device.name}. Se conectează...`;
         const server = await device.gatt.connect();
         
-        statusP.textContent = 'Se caută serviciul de imprimare...';
-        const service = await server.getPrimaryService(SERVICE_UUID_DE_FOLOSIT);
-        if (!service) {
-            statusP.textContent = 'Eroare: Serviciul necesar nu a fost găsit pe acest dispozitiv.';
-            alert('Serviciul necesar nu a fost găsit. Asigură-te că ai selectat imprimanta corectă.');
+        statusP.textContent = "Pas 3: Conectat! Se accesează serviciul...";
+        const service = await server.getPrimaryService(CORRECT_SERVICE_UUID);
+        
+        statusP.textContent = "Pas 4: Serviciu accesat! Se citesc TOATE caracteristicile...";
+
+        // Acum cerem lista TUTUROR caracteristicilor de pe acest serviciu
+        const characteristics = await service.getCharacteristics();
+
+        if (!characteristics || characteristics.length === 0) {
+            statusP.innerHTML = "<b>EROARE:</b> Am găsit serviciul, dar nu conține nicio caracteristică.";
             server.disconnect();
             return;
         }
+
+        // Construim raportul final
+        let reportHTML = "<b>SUCCES! Copiază și trimite tot acest text:</b><br><br>";
+        reportHTML += `<b>Serviciu: ${service.uuid}</b><br>`;
         
-        statusP.textContent = 'Se caută caracteristica de scriere...';
-        niimbotCharacteristic = await service.getCharacteristic(NIIMBOT_CHARACTERISTIC_UUID);
-        if (!niimbotCharacteristic) {
-            statusP.textContent = 'Eroare: Caracteristica necesară nu a fost găsită.';
-            alert('Am găsit serviciul, dar caracteristica pentru imprimare lipsește. Încearcă Planul B din instrucțiuni.');
-            server.disconnect();
-            return;
+        for (const char of characteristics) {
+            let props = [];
+            if (char.properties.read) props.push('CITIRE (READ)');
+            if (char.properties.write) props.push('SCRIERE (WRITE)');
+            if (char.properties.writeWithoutResponse) props.push('SCRIERE FĂRĂ RĂSPUNS (WRITE NO RESP)');
+            if (char.properties.notify) props.push('NOTIFICARE (NOTIFY)');
+            
+            reportHTML += `<br><b>- Caracteristică:</b> ${char.uuid}<br>`;
+            reportHTML += `  <i>Proprietăți: ${props.join(', ')}</i><br>`;
         }
-        
-        statusP.textContent = `Conectat la ${device.name}. Gata de imprimare.`;
-        connectionDot.classList.remove('bg-gray-400');
-        connectionDot.classList.add('bg-green-500');
-        connectionText.textContent = 'Conectat';
-        printBtn.disabled = false;
-        printBtn.classList.remove('bg-gray-300', 'cursor-not-allowed');
-        printBtn.classList.add('bg-blue-600', 'hover:bg-blue-700');
-        connectBtn.textContent = 'Conectat';
+
+        statusP.innerHTML = reportHTML;
+        server.disconnect();
+
     } catch (error) {
-        statusP.textContent = `Eroare: ${error.message}`;
+        statusP.innerHTML = `<b>EROARE:</b> ${error.message}`;
     }
 }
 
-async function printLabel(textToPrint) {
-    if (!niimbotCharacteristic) { alert("Imprimanta nu este conectată."); return; }
-    if (!textToPrint) { alert("Introduceți un text pentru a imprima."); return; }
-    try {
-        statusP.textContent = 'Se pregătește eticheta...';
-        const canvas = createTextImage(textToPrint, 240, 120);
-        const ctx = canvas.getContext('2d');
-        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-        const imagePackets = [];
-        const widthInBytes = Math.ceil(canvas.width / 8);
-        for (let y = 0; y < canvas.height; y++) {
-            let lineBytes = new Uint8Array(widthInBytes);
-            for (let x = 0; x < canvas.width; x++) {
-                const pixelIndex = (y * canvas.width + x) * 4;
-                const pixelValue = imageData.data[pixelIndex] < 128 ? 1 : 0;
-                if (pixelValue === 1) {
-                    lineBytes[Math.floor(x / 8)] |= (1 << (7 - (x % 8)));
-                }
-            }
-            const header = [(y >> 8) & 0xFF, y & 0xFF, 0, 0, 0, 1];
-            imagePackets.push(createNiimbotPacket(0x85, Array.from(new Uint8Array([...header, ...lineBytes]))));
-        }
-        const delay = ms => new Promise(res => setTimeout(res, ms));
-        statusP.textContent = 'Se trimit comenzile...';
-        await niimbotCharacteristic.writeValueWithoutResponse(createNiimbotPacket(0x21, [3]));
-        await niimbotCharacteristic.writeValueWithoutResponse(createNiimbotPacket(0x23, [1]));
-        await niimbotCharacteristic.writeValueWithoutResponse(createNiimbotPacket(0x01, [1]));
-        await niimbotCharacteristic.writeValueWithoutResponse(createNiimbotPacket(0x03, [1]));
-        const dimensionData = [(canvas.width >> 8) & 0xFF, canvas.width & 0xFF, (canvas.height >> 8) & 0xFF, canvas.height & 0xFF];
-        await niimbotCharacteristic.writeValueWithoutResponse(createNiimbotPacket(0x13, dimensionData));
-        await niimbotCharacteristic.writeValueWithoutResponse(createNiimbotPacket(0x15, [1, 0]));
-        statusP.textContent = 'Se transferă datele etichetei...';
-        for (const packet of imagePackets) {
-            await niimbotCharacteristic.writeValueWithoutResponse(packet);
-            await delay(5);
-        }
-        await niimbotCharacteristic.writeValueWithoutResponse(createNiimbotPacket(0xE3, [1]));
-        await niimbotCharacteristic.writeValueWithoutResponse(createNiimbotPacket(0xF3, [1]));
-        statusP.textContent = 'Comandă trimisă cu succes! Gata de o nouă imprimare.';
-    } catch (error) {
-        statusP.textContent = `Eroare la imprimare: ${error.message}`;
-    }
-}
+// Legăm butonul de noua funcție
+connectBtn.addEventListener('click', discoverCharacteristics);
 
-connectBtn.addEventListener('click', connectToPrinter);
-printBtn.addEventListener('click', () => {
-    const text = textInput.value;
-    printLabel(text);
-});
 
 document.addEventListener('DOMContentLoaded', () => {
-    // Completează textul de imprimat dacă este primit prin URL
-    const urlParams = new URLSearchParams(window.location.search);
-    const textToPrint = urlParams.get('text');
-    if (textToPrint) {
-        textInput.value = textToPrint;
-    }
-
-    // --- MODIFICARE AICI ---
-    // Setează numărul versiunii scriptului pe pagină
     const versionElement = document.getElementById('script-version');
     if (versionElement) {
-        versionElement.textContent = 'v1';
+        versionElement.textContent = 'v2';
     }
-    // --- SFÂRȘIT MODIFICARE ---
 });
