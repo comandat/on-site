@@ -1,53 +1,60 @@
-// --- COD SPECIAL DE DEPANARE PENTRU A DESCOPERI SERVICIILE ---
+// --- COD SPECIAL PENTRU A DESCOPERI ADRESA (UUID-ul) SERVICIULUI ---
 
 const connectBtn = document.getElementById('connect-btn');
 const statusP = document.getElementById('status');
 
-// Funcția de conectare a fost modificată pentru a afișa serviciile disponibile
-async function discoverServices() {
+// Această funcție se conectează și afișează serviciile găsite
+async function connectAndDiscover() {
+    // Verificăm dacă browser-ul suportă Web Bluetooth
+    if (!navigator.bluetooth) {
+        alert("EROARE: Acest browser nu suportă Web Bluetooth.");
+        return;
+    }
+
     try {
-        statusP.textContent = 'Pas 1: Se deschide meniul Bluetooth...';
+        statusP.textContent = "Se deschide meniul Bluetooth. Alege imprimanta.";
+        
+        // Pasul 1: Selectăm dispozitivul
         const device = await navigator.bluetooth.requestDevice({
             acceptAllDevices: true
-            // Am scos optionalServices pentru a fi siguri că nu filtrează nimic
         });
 
-        statusP.textContent = `Pas 2: Dispozitiv selectat: ${device.name || 'necunoscut'}`;
+        statusP.textContent = `Dispozitiv selectat: ${device.name}. Se conectează...`;
+        
+        // Pasul 2: Ne conectăm la el
         const server = await device.gatt.connect();
         
-        statusP.textContent = 'Pas 3: Conectat. Se caută TOATE serviciile...';
-        
-        // Aici este partea importantă: cerem TOATE serviciile, nu unul anume
+        statusP.textContent = "Conectat! Se citesc serviciile...";
+
+        // Pasul 3: Cerem lista TUTUROR serviciilor
         const services = await server.getPrimaryServices();
 
         if (!services || services.length === 0) {
-            statusP.textContent = "Eroare: Nu am găsit niciun serviciu pe acest dispozitiv.";
-            alert("EROARE: Nu am găsit niciun serviciu pe acest dispozitiv.");
+            alert("EROARE: Nu am găsit niciun serviciu Bluetooth pe acest dispozitiv după conectare.");
+            statusP.textContent = "Eroare: Niciun serviciu găsit.";
+            server.disconnect();
             return;
         }
 
-        // Construim un mesaj cu toate UUID-urile serviciilor găsite
-        let availableServicesMessage = "SUCCES! Servicii găsite:\n\n";
+        // Pasul 4: Construim și afișăm lista de servicii într-o alertă
+        let servicesMessage = "SUCCES! Am găsit următoarele servicii:\n\n";
         for (const service of services) {
-            availableServicesMessage += service.uuid + "\n";
+            servicesMessage += service.uuid + "\n";
         }
+        
+        alert(servicesMessage); // Aceasta este informația crucială!
 
-        // Afișăm mesajul într-o alertă pentru a fi siguri că îl vezi
-        statusP.textContent = 'Pas 4: Servicii găsite! Vezi alerta.';
-        alert(availableServicesMessage);
-
-        // Odată ce ai copiat UUID-urile, ne putem deconecta
         server.disconnect();
-        statusP.textContent = 'Descoperire finalizată. Poți închide pagina.';
+        statusP.textContent = "Diagnosticare finalizată. Verifică alerta.";
 
     } catch (error) {
-        statusP.textContent = `Eroare: ${error.message}`;
+        statusP.textContent = `A apărut o eroare: ${error.message}`;
         alert(`A apărut o eroare: ${error.message}`);
     }
 }
 
-// Am legat butonul de noua funcție
-connectBtn.addEventListener('click', discoverServices);
+// Legăm butonul de funcția de diagnosticare
+connectBtn.addEventListener('click', connectAndDiscover);
 
-// Am dezactivat restul funcționalităților temporar
+// Dezactivăm funcționalitatea de imprimare
 document.getElementById('print-btn').disabled = true;
