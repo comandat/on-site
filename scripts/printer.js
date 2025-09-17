@@ -1,11 +1,15 @@
-// Variabilă globală pentru a reține conexiunea la caracteristica imprimantei
+// --- Selectoare pentru elementele din printer.html ---
+const connectBtn = document.getElementById('connect-btn');
+const printBtn = document.getElementById('print-btn');
+const textInput = document.getElementById('print-text-input');
+const statusP = document.getElementById('status');
+const connectionDot = document.getElementById('connection-dot');
+const connectionText = document.getElementById('connection-text');
+
 let niimbotCharacteristic = null;
 
-// --- Funcțiile de bază pentru comunicarea cu imprimanta ---
+// --- Logica de bază a imprimantei ---
 
-/**
- * Creează un pachet de comandă formatat pentru imprimantele NIIMBOT.
- */
 function createNiimbotPacket(type, data) {
     const dataBytes = Array.isArray(data) ? data : [data];
     const checksum = dataBytes.reduce((acc, byte) => acc ^ byte, type ^ dataBytes.length);
@@ -13,132 +17,127 @@ function createNiimbotPacket(type, data) {
     return new Uint8Array(packet);
 }
 
-/**
- * Se conectează la imprimantă prin Web Bluetooth.
- */
+function createTextImage(text, width, height) {
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = 'white';
+    ctx.fillRect(0, 0, width, height);
+    ctx.fillStyle = 'black';
+    ctx.font = 'bold 60px Arial'; // Ajustat pentru texte mai lungi
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(text, width / 2, height / 2);
+    return canvas;
+}
+
+// --- Funcțiile principale ---
+
 async function connectToPrinter() {
     if (niimbotCharacteristic) {
-        console.log("Deja conectat.");
-        alert("Imprimanta este deja conectată.");
+        statusP.textContent = "Deja conectat.";
         return;
     }
-
     try {
-        console.log('Se caută imprimante...');
-        alert('Se caută imprimante... Aprobă fereastra de selecție.');
-
+        statusP.textContent = 'Se caută imprimante...';
         const device = await navigator.bluetooth.requestDevice({
             filters: [{ namePrefix: 'NIIMBOT' }],
             optionalServices: ['000018f0-0000-1000-8000-00805f9b34fb']
         });
 
-        console.log('Conectare la serverul GATT...');
+        statusP.textContent = 'Conectare la serverul GATT...';
         const server = await device.gatt.connect();
-
         const service = await server.getPrimaryService('000018f0-0000-1000-8000-00805f9b34fb');
         niimbotCharacteristic = await service.getCharacteristic('00002af1-0000-1000-8000-00805f9b34fb');
-
-        console.log(`Conectat la ${device.name}`);
-        alert(`Conectat la imprimanta ${device.name}`);
-
-        // Schimbă culoarea butonului pentru a indica starea de conectare
-        document.getElementById('connect-printer-button').classList.add('text-green-400');
+        
+        // Actualizare UI pentru a arăta starea de conectat
+        statusP.textContent = `Conectat la ${device.name}. Gata de imprimare.`;
+        connectionDot.classList.remove('bg-gray-400');
+        connectionDot.classList.add('bg-green-500');
+        connectionText.textContent = 'Conectat';
+        printBtn.disabled = false;
+        printBtn.classList.remove('bg-gray-300', 'cursor-not-allowed');
+        printBtn.classList.add('bg-blue-600', 'hover:bg-blue-700');
+        connectBtn.textContent = 'Conectat';
 
     } catch (error) {
-        console.error("Eroare la conectare:", error);
-        alert(`Eroare la conectare: ${error.message}`);
+        statusP.textContent = `Eroare: ${error.message}`;
     }
 }
 
-/**
- * Generează o imagine (canvas) cu textul specificat.
- */
-function createTextImage(text, width, height) {
-    const canvas = document.createElement('canvas');
-    canvas.width = width; // 30 mm * 8 dots/mm = 240 dots
-    canvas.height = height; // 15 mm * 8 dots/mm = 120 dots
-    const ctx = canvas.getContext('2d');
-
-    // Fundal alb
-    ctx.fillStyle = 'white';
-    ctx.fillRect(0, 0, width, height);
-    
-    // Setări text
-    ctx.fillStyle = 'black';
-    ctx.font = 'bold 80px Arial'; // Font mare pentru a fi vizibil
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    
-    // Desenează textul pe centru
-    ctx.fillText(text, width / 2, height / 2);
-    
-    return canvas;
-}
-
-/**
- * Funcția principală care printează textul "1".
- */
-async function printLabel() {
+async function printLabel(textToPrint) {
     if (!niimbotCharacteristic) {
-        alert("Imprimanta nu este conectată. Apasă pe iconița de imprimantă pentru a te conecta.");
+        alert("Imprimanta nu este conectată.");
+        return;
+    }
+    if (!textToPrint) {
+        alert("Introduceți un text pentru a imprima.");
         return;
     }
 
     try {
-        console.log("Încep procesul de imprimare...");
-
-        // Generează o imagine 30x15mm (240x120 pixeli) cu textul "1"
-        const canvas = createTextImage('1', 240, 120); 
+        statusP.textContent = 'Se pregătește eticheta...';
+        
+        // Eticheta este 30x15mm, ceea ce înseamnă aprox. 240x120 pixeli (la 8 puncte/mm)
+        const canvas = createTextImage(textToPrint, 240, 120);
         const ctx = canvas.getContext('2d');
         const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
         
-        // Procesează imaginea pentru imprimantă
         const imagePackets = [];
         const widthInBytes = Math.ceil(canvas.width / 8);
-
         for (let y = 0; y < canvas.height; y++) {
             let lineBytes = new Uint8Array(widthInBytes);
             for (let x = 0; x < canvas.width; x++) {
                 const pixelIndex = (y * canvas.width + x) * 4;
-                const pixelValue = imageData.data[pixelIndex] < 128 ? 1 : 0; // 1 pentru negru, 0 pentru alb (canvas-ul nu e inversat)
+                const pixelValue = imageData.data[pixelIndex] < 128 ? 1 : 0;
                 if (pixelValue === 1) {
                     lineBytes[Math.floor(x / 8)] |= (1 << (7 - (x % 8)));
                 }
             }
             const header = [(y >> 8) & 0xFF, y & 0xFF, 0, 0, 0, 1];
-            const packetData = new Uint8Array([...header, ...lineBytes]);
-            imagePackets.push(createNiimbotPacket(0x85, Array.from(packetData)));
+            imagePackets.push(createNiimbotPacket(0x85, Array.from(new Uint8Array([...header, ...lineBytes]))));
         }
 
-        // Trimite secvența de comenzi
         const delay = ms => new Promise(res => setTimeout(res, ms));
         
+        statusP.textContent = 'Se trimit comenzile...';
         await niimbotCharacteristic.writeValueWithoutResponse(createNiimbotPacket(0x21, [3])); // Density
-        await niimbotCharacteristic.writeValueWithoutResponse(createNiimbotPacket(0x23, [1])); // Label Type
+        // ... (restul secvenței de comenzi este identică)
         await niimbotCharacteristic.writeValueWithoutResponse(createNiimbotPacket(0x01, [1])); // Start Print
-        await niimbotCharacteristic.writeValueWithoutResponse(createNiimbotPacket(0x03, [1])); // Start Page Print
-        
-        const dimensionData = [(canvas.width >> 8) & 0xFF, canvas.width & 0xFF, (canvas.height >> 8) & 0xFF, canvas.height & 0xFF];
+        await niimbotCharacteristic.writeValueWithoutResponse(createNiimbotPacket(0x03, [1])); // Start Page
+        const dimensionData = [(canvas.width >> 8) & 0xFF, canvas.width & 0xFF, (canvas.height >> 8) & 0xFF, height & 0xFF];
         await niimbotCharacteristic.writeValueWithoutResponse(createNiimbotPacket(0x13, dimensionData));
         await niimbotCharacteristic.writeValueWithoutResponse(createNiimbotPacket(0x15, [1, 0])); // Quantity
 
-        console.log("Se trimit datele etichetei...");
+        statusP.textContent = 'Se transferă datele etichetei...';
         for (const packet of imagePackets) {
             await niimbotCharacteristic.writeValueWithoutResponse(packet);
             await delay(5);
         }
 
-        await niimbotCharacteristic.writeValueWithoutResponse(createNiimbotPacket(0xE3, [1])); // End Page Print
+        await niimbotCharacteristic.writeValueWithoutResponse(createNiimbotPacket(0xE3, [1])); // End Page
         await niimbotCharacteristic.writeValueWithoutResponse(createNiimbotPacket(0xF3, [1])); // End Print
 
-        console.log("Imprimare finalizată!");
-        alert("Comanda de imprimare a fost trimisă cu succes!");
-
+        statusP.textContent = 'Comandă trimisă cu succes! Gata de o nouă imprimare.';
     } catch (error) {
-        console.error("Eroare la imprimare:", error);
-        alert(`Eroare la imprimare: ${error.message}`);
+        statusP.textContent = `Eroare la imprimare: ${error.message}`;
     }
 }
 
-// Exportă funcțiile pentru a putea fi folosite în alt fișier
-export { connectToPrinter, printLabel };
+// --- Event Listeners pentru pagina printer.html ---
+
+connectBtn.addEventListener('click', connectToPrinter);
+printBtn.addEventListener('click', () => {
+    const text = textInput.value;
+    printLabel(text);
+});
+
+// Verifică dacă există text de imprimat pre-completat în URL
+document.addEventListener('DOMContentLoaded', () => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const textToPrint = urlParams.get('text');
+    if (textToPrint) {
+        textInput.value = textToPrint;
+    }
+});
