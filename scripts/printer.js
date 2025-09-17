@@ -36,12 +36,12 @@ async function connectToPrinter() {
         return;
     }
     try {
-        statusP.textContent = 'Se caută imprimante...';
+        statusP.textContent = 'Se caută dispozitive...';
 
         // --- MODIFICARE AICI ---
-        // Caută toate dispozitivele al căror nume începe cu "D".
+        // Afișează TOATE dispozitivele Bluetooth din jur, fără niciun filtru.
         const device = await navigator.bluetooth.requestDevice({
-            filters: [{ namePrefix: 'D' }], // <-- Schimbat din 'name' în 'namePrefix'
+            acceptAllDevices: true, // <-- Această opțiune acceptă orice dispozitiv
             optionalServices: [0x18f0]
         });
         // --- SFÂRȘIT MODIFICARE ---
@@ -52,7 +52,7 @@ async function connectToPrinter() {
         niimbotCharacteristic = await service.getCharacteristic(0x2af1);
         
         statusP.textContent = `Conectat la ${device.name}. Gata de imprimare.`;
-        connectionDot.classList.remove('bg-ray-400');
+        connectionDot.classList.remove('bg-gray-400');
         connectionDot.classList.add('bg-green-500');
         connectionText.textContent = 'Conectat';
         printBtn.disabled = false;
