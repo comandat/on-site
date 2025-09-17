@@ -8,18 +8,18 @@
     <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet"/>
     <style>
         .dot { height: 10px; width: 10px; border-radius: 50%; display: inline-block; }
-        #status { white-space: pre-wrap; /* Permite afișarea corectă a liniilor noi */ }
+        #status { white-space: pre-wrap; word-wrap: break-word; }
     </style>
 </head>
 <body class="bg-gray-100 flex items-center justify-center min-h-screen">
 
 <div class="w-full max-w-md mx-auto bg-white rounded-2xl shadow-lg p-6">
     <div class="text-center">
-        <span class="material-symbols-outlined text-6xl text-blue-600">print</span>
+        <span class="material-symbols-outlined text-6xl text-blue-600">biotech</span>
         <h1 class="text-2xl font-bold text-gray-800 mt-2">
-            Control Imprimantă <span id="script-version" class="text-sm font-normal text-gray-400"></span>
+            Diagnosticare Imprimantă <span id="script-version" class="text-sm font-normal text-gray-400"></span>
         </h1>
-        <p id="status" class="text-gray-500 mt-1 text-left bg-gray-100 p-3 rounded-lg">Așteptare comandă...</p>
+        <p id="status" class="text-gray-500 mt-4 text-left bg-gray-100 p-3 rounded-lg font-mono text-xs">Așteptare comandă...</p>
     </div>
 
     <div class="mt-6">
@@ -34,7 +34,81 @@
     </div>
 </div>
 
-<script src="scripts/printer.js" type="module"></script>
+<script>
+// --- COD DE DIAGNOSTICARE FINAL (v3) - GĂSEȘTE CARACTERISTICILE ---
 
+const connectBtn = document.getElementById('connect-btn');
+const statusP = document.getElementById('status');
+const versionElement = document.getElementById('script-version');
+
+// Folosim UUID-ul de Serviciu pe care l-am confirmat că este corect
+const CORRECT_SERVICE_UUID = '49535343-fe7d-4ae5-8fa9-9fafd205e455';
+
+async function discoverCharacteristics() {
+    try {
+        statusP.textContent = "Pas 1: Verificăm suportul Bluetooth...";
+        if (!navigator.bluetooth) {
+            statusP.textContent = "EROARE: Acest browser nu suportă Web Bluetooth.";
+            return;
+        }
+
+        statusP.textContent = "Pas 2: Se deschide meniul. Alege imprimanta...";
+        
+        // Căutăm direct imprimanta care are serviciul confirmat
+        const device = await navigator.bluetooth.requestDevice({
+            filters: [{ services: [CORRECT_SERVICE_UUID] }]
+        });
+
+        statusP.textContent = `Pas 3: Dispozitiv găsit: ${device.name}. Se conectează...`;
+        const server = await device.gatt.connect();
+        
+        statusP.textContent = "Pas 4: Conectat! Se accesează serviciul...";
+        const service = await server.getPrimaryService(CORRECT_SERVICE_UUID);
+        
+        statusP.textContent = "Pas 5: Serviciu accesat! Se citesc TOATE caracteristicile...";
+
+        // Acum cerem lista TUTUROR caracteristicilor de pe acest serviciu
+        const characteristics = await service.getCharacteristics();
+
+        if (!characteristics || characteristics.length === 0) {
+            statusP.innerHTML = "<b>EROARE:</b> Am găsit serviciul, dar nu conține nicio caracteristică.";
+            server.disconnect();
+            return;
+        }
+
+        // Construim raportul final
+        let reportHTML = "<b>SUCCES! Copiază și trimite tot acest text:</b><br><br>";
+        reportHTML += `<b>Serviciu: ${service.uuid}</b><br>`;
+        
+        for (const char of characteristics) {
+            let props = [];
+            if (char.properties.read) props.push('CITIRE');
+            if (char.properties.write) props.push('SCRIERE');
+            if (char.properties.writeWithoutResponse) props.push('SCRIERE FĂRĂ RĂSPUNS');
+            if (char.properties.notify) props.push('NOTIFICARE');
+            
+            reportHTML += `<br><b>- Caracteristică:</b> ${char.uuid}<br>`;
+            reportHTML += `  <i>Proprietăți: ${props.join(', ')}</i><br>`;
+        }
+
+        statusP.innerHTML = reportHTML;
+        server.disconnect();
+
+    } catch (error) {
+        statusP.innerHTML = `<b>EROARE:</b> ${error.name} - ${error.message}`;
+    }
+}
+
+// Legăm butonul de noua funcție
+connectBtn.addEventListener('click', discoverCharacteristics);
+
+
+document.addEventListener('DOMContentLoaded', () => {
+    if (versionElement) {
+        versionElement.textContent = 'v3';
+    }
+});
+
+</script>
 </body>
 </html>
