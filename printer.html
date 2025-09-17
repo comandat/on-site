@@ -17,12 +17,9 @@
     <div class="text-center">
         <span class="material-symbols-outlined text-6xl text-blue-600">biotech</span>
         <h1 class="text-2xl font-bold text-gray-800 mt-2">
-            Diagnosticare Imprimantă
+            Diagnosticare Imprimantă <span id="script-version" class="text-sm font-normal text-red-500"></span>
         </h1>
-        
-        <p id="script-version" class="text-lg font-bold text-red-500 mt-2"></p>
-        
-        <p id="status" class="text-gray-500 mt-2 text-left bg-gray-100 p-3 rounded-lg font-mono text-xs">Așteptare comandă...</p>
+        <p id="status" class="text-gray-500 mt-4 text-left bg-gray-100 p-3 rounded-lg font-mono text-xs">Așteptare comandă...</p>
     </div>
 
     <div class="mt-6">
@@ -38,7 +35,7 @@
 </div>
 
 <script>
-// --- COD DE DIAGNOSTICARE FINAL (v3.1) - GĂSEȘTE CARACTERISTICILE ---
+// --- COD DE DIAGNOSTICARE FINAL (v3.2) - GĂSEȘTE CARACTERISTICILE ---
 
 const connectBtn = document.getElementById('connect-btn');
 const statusP = document.getElementById('status');
@@ -57,9 +54,13 @@ async function discoverCharacteristics() {
 
         statusP.textContent = "Pas 2: Se deschide meniul. Alege imprimanta...";
         
+        // --- MODIFICARE AICI: Am scos filtrul ---
+        // Acum ar trebui să vezi din nou TOATE dispozitivele
         const device = await navigator.bluetooth.requestDevice({
-            filters: [{ services: [CORRECT_SERVICE_UUID] }]
+            acceptAllDevices: true,
+            optionalServices: [CORRECT_SERVICE_UUID] // Păstrăm acest rând pentru a cere permisiunea corectă
         });
+        // --- SFÂRȘIT MODIFICARE ---
 
         statusP.textContent = `Pas 3: Dispozitiv găsit: ${device.name}. Se conectează...`;
         const server = await device.gatt.connect();
@@ -103,8 +104,7 @@ connectBtn.addEventListener('click', discoverCharacteristics);
 
 document.addEventListener('DOMContentLoaded', () => {
     if (versionElement) {
-        // SETĂM VERSIUNEA AICI
-        versionElement.textContent = 'v3.1';
+        versionElement.textContent = 'v3.2';
     }
 });
 
