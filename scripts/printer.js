@@ -1,4 +1,4 @@
-// --- COD FINAL DE IMPRIMARE (FĂRĂ FILTRARE) ---
+// --- COD FINAL DE IMPRIMARE (FĂRĂ FILTRARE) - v1 ---
 
 const connectBtn = document.getElementById('connect-btn');
 const printBtn = document.getElementById('print-btn');
@@ -50,13 +50,10 @@ async function connectToPrinter() {
     try {
         statusP.textContent = 'Se caută dispozitive...';
         
-        // --- MODIFICARE AICI ---
-        // Am eliminat filtrul pentru a afișa toate dispozitivele
         const device = await navigator.bluetooth.requestDevice({
             acceptAllDevices: true,
             optionalServices: [SERVICE_UUID_DE_FOLOSIT]
         });
-        // --- SFÂRȘIT MODIFICARE ---
         
         statusP.textContent = `Conectare la ${device.name || 'dispozitiv necunoscut'}...`;
         const server = await device.gatt.connect();
@@ -143,9 +140,18 @@ printBtn.addEventListener('click', () => {
 });
 
 document.addEventListener('DOMContentLoaded', () => {
+    // Completează textul de imprimat dacă este primit prin URL
     const urlParams = new URLSearchParams(window.location.search);
     const textToPrint = urlParams.get('text');
     if (textToPrint) {
         textInput.value = textToPrint;
     }
+
+    // --- MODIFICARE AICI ---
+    // Setează numărul versiunii scriptului pe pagină
+    const versionElement = document.getElementById('script-version');
+    if (versionElement) {
+        versionElement.textContent = 'v1';
+    }
+    // --- SFÂRȘIT MODIFICARE ---
 });
