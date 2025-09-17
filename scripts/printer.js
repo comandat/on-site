@@ -37,14 +37,19 @@ async function connectToPrinter() {
     }
     try {
         statusP.textContent = 'Se caută imprimante...';
+
+        // --- MODIFICARE AICI ---
+        // Înlocuiește 'NUME_IMPRIMANTA_AICI' cu numele exact al imprimantei tale (ex: 'B21').
         const device = await navigator.bluetooth.requestDevice({
-            filters: [{ namePrefix: 'NIIMBOT' }],
-            optionalServices: ['000018f0-0000-1000-8000-00805f9b34fb']
+            filters: [{ name: 'NUME_IMPRIMANTA_AICI' }],
+            optionalServices: ['0x18f0'] // prescurtare pentru UUID-ul complet
         });
+        // --- SFÂRȘIT MODIFICARE ---
+
         statusP.textContent = 'Conectare la serverul GATT...';
         const server = await device.gatt.connect();
-        const service = await server.getPrimaryService('000018f0-0000-1000-8000-00805f9b34fb');
-        niimbotCharacteristic = await service.getCharacteristic('00002af1-0000-1000-8000-00805f9b34fb');
+        const service = await server.getPrimaryService(0x18f0);
+        niimbotCharacteristic = await service.getCharacteristic(0x2af1);
         
         statusP.textContent = `Conectat la ${device.name}. Gata de imprimare.`;
         connectionDot.classList.remove('bg-gray-400');
