@@ -6,6 +6,7 @@
     <title>Control Imprimantă NIIMBOT</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet"/>
+    <script src="https://cdn.jsdelivr.net/npm/qrcode-generator/qrcode.js"></script>
     <style>
         .dot { height: 10px; width: 10px; border-radius: 50%; display: inline-block; }
     </style>
@@ -16,7 +17,7 @@
     <div class="text-center">
         <span class="material-symbols-outlined text-6xl text-blue-600">print</span>
         <h1 class="text-2xl font-bold text-gray-800 mt-2">
-            Control Imprimantă <span class="text-sm font-normal text-gray-400">v-niimprintx-6</span>
+            Control Imprimantă <span class="text-sm font-normal text-gray-400">v-niimprintx-7</span>
         </h1>
         <p id="status" class="text-gray-500 mt-1">Conectează-te pentru a putea imprima.</p>
     </div>
@@ -35,8 +36,8 @@
     <hr class="my-6 border-gray-200">
 
     <div>
-        <label for="print-text-input" class="block text-sm font-medium text-gray-700">Text de imprimat:</label>
-        <input type="text" id="print-text-input" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm" value="TEST" placeholder="ex: PROD-001">
+        <label for="print-text-input" class="block text-sm font-medium text-gray-700">Cod pentru QR și Text:</label>
+        <input type="text" id="print-text-input" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm" value="B08ZSFS4J6CN" placeholder="ex: B08ZSFS4J6CN">
         
         <button id="print-btn" class="mt-4 w-full rounded-lg bg-gray-300 py-3 text-base font-bold text-white cursor-not-allowed" disabled>
             Imprimă Eticheta
@@ -49,7 +50,7 @@
 </div>
 
 <script>
-// --- COD FINAL DE IMPRIMARE (v-niimprintx) ---
+// --- COD FINAL DE IMPRIMARE (v-niimprintx-7) ---
 
 const connectBtn = document.getElementById('connect-btn');
 const printBtn = document.getElementById('print-btn');
@@ -59,8 +60,7 @@ const connectionDot = document.getElementById('connection-dot');
 const connectionText = document.getElementById('connection-text');
 
 let niimbotCharacteristic = null;
-// Variabilă pentru a gestiona răspunsurile de la imprimantă
-let responseResolver = null; 
+let responseResolver = null;
 
 function createNiimbotPacket(type, data) {
     const dataBytes = Array.isArray(data) ? data : [data];
@@ -69,43 +69,23 @@ function createNiimbotPacket(type, data) {
     return new Uint8Array(packet);
 }
 
-function createTextImage(text, width, height) {
-    const canvas = document.createElement('canvas');
-    canvas.width = width;
-    canvas.height = height;
-    const ctx = canvas.getContext('2d');
-    
-    // Fundalul este negru (pixel valoare 0), textul este alb (pixel valoare 255)
-    ctx.fillStyle = 'black';
-    ctx.fillRect(0, 0, width, height);
-    ctx.fillStyle = 'white';
-    ctx.font = 'bold 90px Arial'; 
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(text, width / 2, height / 2 + 10);
-    return canvas;
-}
-
-// Funcție ce gestionează notificările primite
 function handleCharacteristicValueChanged(event) {
     if (responseResolver) {
         const value = new Uint8Array(event.target.value.buffer);
-        responseResolver(value); // Rezolvă Promise-ul cu datele primite
+        responseResolver(value);
         responseResolver = null;
     }
 }
 
-// Funcție ce trimite o comandă și așteaptă un răspuns (notificare)
 async function sendCommandAndWait(characteristic, packet) {
     return new Promise((resolve, reject) => {
         responseResolver = resolve;
-        // Setează un timeout în cazul în care imprimanta nu răspunde
         const timeout = setTimeout(() => {
             if (responseResolver) {
                 responseResolver = null;
                 reject(new Error('Timeout: Printer did not respond.'));
             }
-        }, 5000); // Așteaptă 5 secunde
+        }, 5000);
 
         characteristic.writeValueWithoutResponse(packet).catch(err => {
             clearTimeout(timeout);
@@ -114,7 +94,6 @@ async function sendCommandAndWait(characteristic, packet) {
     });
 }
 
-
 async function connectToPrinter() {
     if (niimbotCharacteristic) {
         statusP.textContent = "Deja conectat.";
@@ -122,7 +101,6 @@ async function connectToPrinter() {
     }
     try {
         statusP.textContent = 'Se caută imprimante...';
-        
         const device = await navigator.bluetooth.requestDevice({
             filters: [{ namePrefix: 'D' }],
             optionalServices: ['e7810a71-73ae-499d-8c15-faa9aef0c3f2', '49535343-fe7d-4ae5-8fa9-9fafd205e455']
@@ -156,7 +134,6 @@ async function connectToPrinter() {
         
         niimbotCharacteristic = foundCharacteristic;
         
-        // --- MODIFICARE CRITICĂ: Pornim notificările ---
         await niimbotCharacteristic.startNotifications();
         niimbotCharacteristic.addEventListener('characteristicvaluechanged', handleCharacteristicValueChanged);
         
@@ -173,6 +150,7 @@ async function connectToPrinter() {
     }
 }
 
+// --- FUNCȚIA DE PRINTARE MODIFICATĂ COMPLET ---
 async function printLabel(textToPrint) {
     if (!niimbotCharacteristic) {
         alert("Imprimanta nu este conectată.");
@@ -186,34 +164,68 @@ async function printLabel(textToPrint) {
     try {
         statusP.textContent = 'Se pregătește eticheta...';
 
-        // --- MODIFICARE: Inversează lățimea și înălțimea ---
-        const labelWidth = 240;
-        const labelHeight = 120;
+        const labelWidth = 240;  // 30mm
+        const labelHeight = 120; // 15mm
 
         const canvas = document.createElement('canvas');
         canvas.width = labelHeight; // Lățimea canvas-ului devine înălțimea etichetei
         canvas.height = labelWidth; // Înălțimea canvas-ului devine lățimea etichetei
 
         const ctx = canvas.getContext('2d');
-
-        // --- MODIFICARE: Rotește contextul și desenează textul ---
+        
+        // --- DESENARE ETICHETĂ ---
+        // Fundal negru, elemente albe
         ctx.fillStyle = 'black';
         ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        // Salvăm contextul nerotit
+        ctx.save();
         
-        ctx.save(); // Salvează starea curentă a contextului
-        ctx.translate(canvas.width / 2, canvas.height / 2); // Mută originea în centrul canvas-ului
-        ctx.rotate(90 * Math.PI / 180); // Rotește cu 90 de grade
-        
+        // Rotim totul cu 90 de grade
+        ctx.translate(canvas.width / 2, canvas.height / 2);
+        ctx.rotate(90 * Math.PI / 180);
+
+        // ETAPA 1: Generare cod QR ca imagine Data URL
+        const qr = qrcode(0, 'M');
+        qr.addData(textToPrint);
+        qr.make();
+        // Căsuța de 8px, margin de 2*8=16px
+        const qrImg = new Image();
+        qrImg.src = qr.createDataURL(8, 2);
+
+        // Așteptăm încărcarea imaginii QR
+        await new Promise(resolve => { qrImg.onload = resolve; });
+
+        // ETAPA 2: Desenare elemente
+        // Desenăm imaginea QR. Coordonatele sunt relative la canvas-ul rotit.
+        // Originea (0,0) e centrul.
+        const qrSize = 100;
+        ctx.drawImage(qrImg, -labelWidth / 2 + 10, -labelHeight / 2 + 10, qrSize, qrSize);
+
+        // Desenăm textul. Îl împărțim în două dacă e prea lung.
         ctx.fillStyle = 'white';
-        ctx.font = 'bold 90px Arial';
-        ctx.textAlign = 'center';
+        ctx.font = 'bold 38px Arial'; // Font mai mare, ~12pt
+        ctx.textAlign = 'left';
         ctx.textBaseline = 'middle';
-        // Desenează textul la coordonatele 0,0 (care este acum centrul rotit)
-        ctx.fillText(textToPrint, 0, 0); 
-        ctx.restore(); // Restaurează starea originală a contextului
 
+        const textX = -labelWidth / 2 + qrSize + 25; // Poziționare la dreapta de QR
+        
+        if (textToPrint.length > 7) {
+            const mid = Math.ceil(textToPrint.length / 2);
+            const text1 = textToPrint.substring(0, mid);
+            const text2 = textToPrint.substring(mid);
+            ctx.fillText(text1, textX, 0 - 20); // Linia de sus
+            ctx.fillText(text2, textX, 0 + 20); // Linia de jos
+        } else {
+            ctx.fillText(textToPrint, textX, 0); // O singură linie
+        }
+
+        // Restaurăm contextul la starea inițială (nerotit)
+        ctx.restore();
+        
+        // --- SFÂRȘIT DESENARE ---
+        
         const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-
         const imagePackets = [];
         const widthInBytes = Math.ceil(canvas.width / 8);
 
@@ -226,10 +238,8 @@ async function printLabel(textToPrint) {
                     lineBytes[Math.floor(x / 8)] |= (1 << (7 - (x % 8)));
                 }
             }
-
             const header = [(y >> 8) & 0xFF, y & 0xFF, 0, 0, 0, 1];
             const dataPayload = Array.from(new Uint8Array([...header, ...lineBytes]));
-
             imagePackets.push(createNiimbotPacket(0x85, dataPayload));
         }
 
@@ -237,19 +247,17 @@ async function printLabel(textToPrint) {
 
         statusP.textContent = 'Se trimit comenzile...';
 
-        await sendCommandAndWait(niimbotCharacteristic, createNiimbotPacket(0x21, [3])); // Set Density
-        await sendCommandAndWait(niimbotCharacteristic, createNiimbotPacket(0x23, [1])); // Set Label Type
-        await sendCommandAndWait(niimbotCharacteristic, createNiimbotPacket(0x01, [1])); // Start Print
-        await sendCommandAndWait(niimbotCharacteristic, createNiimbotPacket(0x03, [1])); // Start Page Print
+        await sendCommandAndWait(niimbotCharacteristic, createNiimbotPacket(0x21, [3]));
+        await sendCommandAndWait(niimbotCharacteristic, createNiimbotPacket(0x23, [1]));
+        await sendCommandAndWait(niimbotCharacteristic, createNiimbotPacket(0x01, [1]));
+        await sendCommandAndWait(niimbotCharacteristic, createNiimbotPacket(0x03, [1]));
 
-        // --- MODIFICARE: Trimite dimensiunile corecte (înălțime, apoi lățime) ---
         const dimensionData = [
             (canvas.height >> 8) & 0xFF, canvas.height & 0xFF,
             (canvas.width >> 8) & 0xFF, canvas.width & 0xFF
         ];
         await sendCommandAndWait(niimbotCharacteristic, createNiimbotPacket(0x13, dimensionData));
-
-        await sendCommandAndWait(niimbotCharacteristic, createNiimbotPacket(0x15, [0, 1])); // Set Quantity
+        await sendCommandAndWait(niimbotCharacteristic, createNiimbotPacket(0x15, [0, 1]));
 
         statusP.textContent = 'Se transferă datele etichetei...';
         for (const packet of imagePackets) {
@@ -257,8 +265,8 @@ async function printLabel(textToPrint) {
             await delay(20);
         }
 
-        await sendCommandAndWait(niimbotCharacteristic, createNiimbotPacket(0xE3, [1])); // End Page Print
-        await sendCommandAndWait(niimbotCharacteristic, createNiimbotPacket(0xF3, [1])); // End Print
+        await sendCommandAndWait(niimbotCharacteristic, createNiimbotPacket(0xE3, [1]));
+        await sendCommandAndWait(niimbotCharacteristic, createNiimbotPacket(0xF3, [1]));
 
         statusP.textContent = 'Comandă trimisă cu succes!';
     } catch (error) {
@@ -279,7 +287,6 @@ document.addEventListener('DOMContentLoaded', () => {
         textInput.value = textToPrint;
     }
 });
-
 </script>
 </body>
 </html>
