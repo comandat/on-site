@@ -17,7 +17,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const readerElement = document.getElementById('reader');
 
     // Asigură-te că aici este URL-ul de PRODUCȚIE
-const webhookUrl = 'https://automatizare.comandat.ro/webhook/637e1f6e-7beb-4295-89bd-4d7022f12d45';
+const webhookUrl = 'https://automatizare.comandat.ro/webhook-test/637e1f6e-7beb-4295-89bd-4d7022f12d45';
 
     // --- Functii Helper ---
 
@@ -88,4 +88,5 @@ const webhookUrl = 'https://automatizare.comandat.ro/webhook/637e1f6e-7beb-4295-
     // --- Logica de Scanare (ramane neschimbata) ---
     // ...
 });
+
 
