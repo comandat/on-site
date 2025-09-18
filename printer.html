@@ -164,4 +164,61 @@ async function printLabel(textToPrint) {
             
             // --- CORECTARE CRITICĂ AICI: Antetul din `niimprintx` ---
             const header = [
-                (y >> 8) & 0xFF, y & 0xFF,
+                (y >> 8) & 0xFF, y & 0xFF,   // Numărul liniei (2 bytes)
+                0, 0, 0,                     // Trei bytes de zero, conform codului Python
+                1                            // Un byte cu valoarea 1
+            ];
+            
+            imagePackets.push(createNiimbotPacket(0x85, Array.from(new Uint8Array([...header, ...lineBytes]))));
+        }
+        
+        const delay = ms => new Promise(res => setTimeout(res, ms));
+        
+        statusP.textContent = 'Se trimit comenzile...';
+        
+        // Protocolul D11/D110 din niimprintx
+        await niimbotCharacteristic.writeValueWithoutResponse(createNiimbotPacket(0x21, [3]));       // Set Density
+        await niimbotCharacteristic.writeValueWithoutResponse(createNiimbotPacket(0x23, [1]));       // Set Label Type
+        await niimbotCharacteristic.writeValueWithoutResponse(createNiimbotPacket(0x01, [1]));       // Start Print
+        
+        // Am eliminat Print Clear, deoarece nu apare în secvența D110 din niimbluelib
+        await niimbotCharacteristic.writeValueWithoutResponse(createNiimbotPacket(0x03, [1]));       // Start Page Print
+        
+        // Trimitem dimensiunile corect: înălțime, apoi lățime
+        const dimensionData = [(canvas.height >> 8) & 0xFF, canvas.height & 0xFF, (canvas.width >> 8) & 0xFF, canvas.width & 0xFF];
+        await niimbotCharacteristic.writeValueWithoutResponse(createNiimbotPacket(0x13, dimensionData));
+        
+        await niimbotCharacteristic.writeValueWithoutResponse(createNiimbotPacket(0x15, [0, 1]));       // Set Quantity
+
+        statusP.textContent = 'Se transferă datele etichetei...';
+        for (const packet of imagePackets) {
+            await niimbotCharacteristic.writeValueWithoutResponse(packet);
+            await delay(15);
+        }
+        
+        await niimbotCharacteristic.writeValueWithoutResponse(createNiimbotPacket(0xE3, [1]));       // End Page Print
+        await niimbotCharacteristic.writeValueWithoutResponse(createNiimbotPacket(0xF3, [1]));       // End Print
+
+        statusP.textContent = 'Comandă trimisă cu succes!';
+    } catch (error) {
+        statusP.textContent = `Eroare la imprimare: ${error.message}`;
+    }
+}
+
+connectBtn.addEventListener('click', connectToPrinter);
+printBtn.addEventListener('click', () => {
+    const text = textInput.value;
+    printLabel(text);
+});
+
+document.addEventListener('DOMContentLoaded', () => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const textToPrint = urlParams.get('text');
+    if (textToPrint) {
+        textInput.value = textToPrint;
+    }
+});
+
+</script>
+</body>
+</html>
