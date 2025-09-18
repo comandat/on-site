@@ -5,5 +5,5 @@
 if (sessionStorage.getItem('isLoggedIn') !== 'true') {
     // Pastreaza pagina curenta pentru o eventuala redirectionare dupa login
     // sessionStorage.setItem('redirectUrl', window.location.href);
-    window.location.href = 'login.html';
+    window.location.href = 'index.html';
 }
