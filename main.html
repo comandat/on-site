@@ -19,21 +19,7 @@
     
     <main class="flex-1 overflow-y-auto p-4">
         <div class="mx-auto max-w-md">
-            <div class="grid grid-cols-2 gap-4">
-                <a href="products.html" class="block rounded-lg bg-white p-4 shadow-sm transition-transform hover:scale-105 active:scale-95">
-                    <div class="aspect-square flex flex-col justify-between">
-                        <div>
-                            <h2 class="font-bold text-gray-800">Comanda #1024</h2>
-                            <p class="text-sm text-gray-500">Activă</p>
-                        </div>
-                        <div class="flex items-center justify-end">
-                             <span class="material-symbols-outlined text-4xl text-gray-300">
-                                inventory_2
-                            </span>
-                        </div>
-                    </div>
-                </a>
-                 </div>
+            <div id="commands-list-container" class="grid grid-cols-2 gap-4"></div>
         </div>
     </main>
 
@@ -54,6 +40,8 @@
         </div>
     </footer>
 </div>
+
+<script src="scripts/main.js" type="module"></script>
 
 </body>
 </html>
