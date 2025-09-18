@@ -16,7 +16,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const closeScannerButton = document.getElementById('close-scanner-button');
     const readerElement = document.getElementById('reader');
 
-    const webhookUrl = 'https://automatizare.comandat.ro/webhook-test/637e1f6e-7beb-4295-89bd-4d7022f12d45';
+    // Asigură-te că aici este URL-ul de PRODUCȚIE
+const webhookUrl = 'https://automatizare.comandat.ro/webhook/637e1f6e-7beb-4295-89bd-4d7022f12d45';
 
     // --- Functii Helper ---
 
@@ -87,3 +88,4 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- Logica de Scanare (ramane neschimbata) ---
     // ...
 });
+
