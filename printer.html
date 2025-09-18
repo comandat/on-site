@@ -16,7 +16,7 @@
     <div class="text-center">
         <span class="material-symbols-outlined text-6xl text-blue-600">print</span>
         <h1 class="text-2xl font-bold text-gray-800 mt-2">
-            Control Imprimantă <span class="text-sm font-normal text-gray-400">v-final-4</span>
+            Control Imprimantă <span class="text-sm font-normal text-gray-400">v-final-simplificat</span>
         </h1>
         <p id="status" class="text-gray-500 mt-1">Conectează-te pentru a putea imprima.</p>
     </div>
@@ -49,7 +49,7 @@
 </div>
 
 <script>
-// --- COD FINAL DE IMPRIMARE (v-final-4) ---
+// --- COD FINAL DE IMPRIMARE (v-final-simplificat) ---
 
 const connectBtn = document.getElementById('connect-btn');
 const printBtn = document.getElementById('print-btn');
@@ -100,11 +100,7 @@ async function connectToPrinter() {
         
         statusP.textContent = 'Se accesează serviciile...';
         const services = await server.getPrimaryServices();
-        if (services.length === 0) {
-            statusP.textContent = 'Eroare: Nu am găsit niciun serviciu pe acest dispozitiv.';
-            return;
-        }
-
+        
         statusP.textContent = 'Se caută caracteristica potrivită...';
         
         let foundCharacteristic = null;
@@ -153,9 +149,6 @@ async function printLabel(textToPrint) {
 
         for (let y = 0; y < canvas.height; y++) {
             let lineBytes = new Uint8Array(widthInBytes);
-            
-            // --- CORECTARE CRITICĂ AICI ---
-            // Numărăm pixelii negri pentru fiecare linie în parte.
             let blackPixelsCount = 0;
             for (let x = 0; x < canvas.width; x++) {
                 const pixelIndex = (y * canvas.width + x) * 4;
@@ -165,21 +158,15 @@ async function printLabel(textToPrint) {
                     blackPixelsCount++;
                 }
             }
-
-            // Așa cum am descoperit din documentația protocolului, pachetul de imagine (`0x85`)
-            // necesită un antet specific care include numărul de pixeli.
-            // Formatul este [y_H, y_L, 0, 0, 0, 1] + date... dar se pare că pixelii sunt importanți.
-            // Biblioteca niimbluelib folosește un format de 3 bytes pentru pixeli: [0, low_byte, high_byte]
-            const pixelCountBytes = [0, blackPixelsCount & 0xFF, (blackPixelsCount >> 8) & 0xFF];
             
-            // Construim antetul complet al pachetului de imagine
+            // Folosim un antet mai simplu pentru datele de imagine, fără numărul de pixeli,
+            // pentru a fi compatibil cu protocoalele mai vechi.
             const header = [
                 (y >> 8) & 0xFF, y & 0xFF,   // Numărul liniei (2 bytes)
-                ...pixelCountBytes,         // Numărul de pixeli negri (3 bytes)
                 1                           // Numărul de repetiții (1 byte)
             ];
             
-            // Creăm pachetul final pentru această linie
+            // Comanda pentru trimiterea unei linii de imagine este 0x85
             imagePackets.push(createNiimbotPacket(0x85, Array.from(new Uint8Array([...header, ...lineBytes]))));
         }
         
@@ -187,6 +174,7 @@ async function printLabel(textToPrint) {
         
         statusP.textContent = 'Se trimit comenzile...';
         
+        // --- SECVENȚA DE COMENZI SIMPLIFICATĂ (PENTRU D11) ---
         await niimbotCharacteristic.writeValueWithoutResponse(createNiimbotPacket(0x21, [3]));       // Set Density
         await niimbotCharacteristic.writeValueWithoutResponse(createNiimbotPacket(0x23, [1]));       // Set Label Type
         await niimbotCharacteristic.writeValueWithoutResponse(createNiimbotPacket(0x01, [1]));       // Start Print
@@ -194,18 +182,21 @@ async function printLabel(textToPrint) {
         await niimbotCharacteristic.writeValueWithoutResponse(createNiimbotPacket(0x20, [1]));       // Print Clear
         await niimbotCharacteristic.writeValueWithoutResponse(createNiimbotPacket(0x03, [1]));       // Start Page Print
         
-        const dimensionData = [(canvas.height >> 8) & 0xFF, canvas.height & 0xFF, (canvas.width >> 8) & 0xFF, canvas.width & 0xFF];
-        await niimbotCharacteristic.writeValueWithoutResponse(createNiimbotPacket(0x13, dimensionData)); // Set Dimension
-        await niimbotCharacteristic.writeValueWithoutResponse(createNiimbotPacket(0x15, [0, 1]));       // Set Quantity (1 copie)
+        // CORECTARE CRITICĂ: Trimitem doar înălțimea (2 bytes) pentru SetPageSize
+        const dimensionData = [(canvas.height >> 8) & 0xFF, canvas.height & 0xFF];
+        await niimbotCharacteristic.writeValueWithoutResponse(createNiimbotPacket(0x13, dimensionData)); // Set Page Size
+        
+        await niimbotCharacteristic.writeValueWithoutResponse(createNiimbotPacket(0x15, [0, 1]));       // Set Quantity
 
         statusP.textContent = 'Se transferă datele etichetei...';
         for (const packet of imagePackets) {
             await niimbotCharacteristic.writeValueWithoutResponse(packet);
-            await delay(10); // Am mărit puțin delay-ul pentru stabilitate
+            await delay(10);
         }
         
         await niimbotCharacteristic.writeValueWithoutResponse(createNiimbotPacket(0xE3, [1]));       // End Page Print
         await niimbotCharacteristic.writeValueWithoutResponse(createNiimbotPacket(0xF3, [1]));       // End Print
+        // --- SFÂRȘIT SECVENȚA CORECTATĂ ---
 
         statusP.textContent = 'Comandă trimisă cu succes!';
     } catch (error) {
