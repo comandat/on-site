@@ -12,11 +12,12 @@ document.addEventListener('DOMContentLoaded', () => {
         return;
     }
 
+    container.innerHTML = ''; // Golim containerul
     commands.forEach(command => {
         const commandEl = document.createElement('a');
-        // Salvam ID-ul comenzii in sessionStorage la click, pentru a fi accesibil pe pagina de produse
-        commandEl.href = `products.html?commandId=${command.id}`;
+        commandEl.href = 'products.html'; // URL curat
         commandEl.className = 'block rounded-lg bg-white p-4 shadow-sm transition-transform hover:scale-105 active:scale-95';
+        commandEl.dataset.commandId = command.id; // Stocam ID-ul aici temporar
         
         commandEl.innerHTML = `
             <div class="aspect-square flex flex-col justify-between">
@@ -31,6 +32,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 </div>
             </div>
         `;
+
+        // Adaugam un event listener pentru a salva ID-ul si a naviga
+        commandEl.addEventListener('click', (event) => {
+            event.preventDefault();
+            sessionStorage.setItem('currentCommandId', command.id);
+            window.location.href = event.currentTarget.href;
+        });
+
         container.appendChild(commandEl);
     });
 });
