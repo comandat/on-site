@@ -16,7 +16,7 @@
     <div class="text-center">
         <span class="material-symbols-outlined text-6xl text-blue-600">print</span>
         <h1 class="text-2xl font-bold text-gray-800 mt-2">
-            Control Imprimantă <span class="text-sm font-normal text-gray-400">v-final-simplificat</span>
+            Control Imprimantă <span class="text-sm font-normal text-gray-400">v-niimprintx</span>
         </h1>
         <p id="status" class="text-gray-500 mt-1">Conectează-te pentru a putea imprima.</p>
     </div>
@@ -36,7 +36,7 @@
 
     <div>
         <label for="print-text-input" class="block text-sm font-medium text-gray-700">Text de imprimat:</label>
-        <input type="text" id="print-text-input" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm" placeholder="ex: PROD-001">
+        <input type="text" id="print-text-input" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm" value="TEST" placeholder="ex: PROD-001">
         
         <button id="print-btn" class="mt-4 w-full rounded-lg bg-gray-300 py-3 text-base font-bold text-white cursor-not-allowed" disabled>
             Imprimă Eticheta
@@ -49,7 +49,7 @@
 </div>
 
 <script>
-// --- COD FINAL DE IMPRIMARE (v-final-simplificat) ---
+// --- COD FINAL DE IMPRIMARE (v-niimprintx) ---
 
 const connectBtn = document.getElementById('connect-btn');
 const printBtn = document.getElementById('print-btn');
@@ -72,9 +72,10 @@ function createTextImage(text, width, height) {
     canvas.width = width;
     canvas.height = height;
     const ctx = canvas.getContext('2d');
-    ctx.fillStyle = 'white';
-    ctx.fillRect(0, 0, width, height);
+    // Imaginea este inversată (negru pe alb), iar la procesare se face negativul
     ctx.fillStyle = 'black';
+    ctx.fillRect(0, 0, width, height);
+    ctx.fillStyle = 'white';
     ctx.font = 'bold 60px Arial';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
@@ -149,24 +150,22 @@ async function printLabel(textToPrint) {
 
         for (let y = 0; y < canvas.height; y++) {
             let lineBytes = new Uint8Array(widthInBytes);
-            let blackPixelsCount = 0;
             for (let x = 0; x < canvas.width; x++) {
+                // Procesăm imaginea ca negativ: pixelul alb (255) devine 1, cel negru (0) devine 0.
                 const pixelIndex = (y * canvas.width + x) * 4;
-                const pixelValue = imageData.data[pixelIndex] < 128 ? 1 : 0;
+                const pixelValue = imageData.data[pixelIndex] > 128 ? 1 : 0; 
                 if (pixelValue === 1) {
                     lineBytes[Math.floor(x / 8)] |= (1 << (7 - (x % 8)));
-                    blackPixelsCount++;
                 }
             }
             
-            // Folosim un antet mai simplu pentru datele de imagine, fără numărul de pixeli,
-            // pentru a fi compatibil cu protocoalele mai vechi.
+            // --- CORECTARE CRITICĂ AICI: Antetul din `niimprintx` ---
             const header = [
                 (y >> 8) & 0xFF, y & 0xFF,   // Numărul liniei (2 bytes)
-                1                           // Numărul de repetiții (1 byte)
+                0, 0, 0,                     // Trei bytes de zero, conform codului Python
+                1                            // Un byte cu valoarea 1
             ];
             
-            // Comanda pentru trimiterea unei linii de imagine este 0x85
             imagePackets.push(createNiimbotPacket(0x85, Array.from(new Uint8Array([...header, ...lineBytes]))));
         }
         
@@ -174,29 +173,26 @@ async function printLabel(textToPrint) {
         
         statusP.textContent = 'Se trimit comenzile...';
         
-        // --- SECVENȚA DE COMENZI SIMPLIFICATĂ (PENTRU D11) ---
+        // Protocolul D11/D110 din niimprintx
         await niimbotCharacteristic.writeValueWithoutResponse(createNiimbotPacket(0x21, [3]));       // Set Density
         await niimbotCharacteristic.writeValueWithoutResponse(createNiimbotPacket(0x23, [1]));       // Set Label Type
         await niimbotCharacteristic.writeValueWithoutResponse(createNiimbotPacket(0x01, [1]));       // Start Print
-        
-        await niimbotCharacteristic.writeValueWithoutResponse(createNiimbotPacket(0x20, [1]));       // Print Clear
         await niimbotCharacteristic.writeValueWithoutResponse(createNiimbotPacket(0x03, [1]));       // Start Page Print
         
-        // CORECTARE CRITICĂ: Trimitem doar înălțimea (2 bytes) pentru SetPageSize
-        const dimensionData = [(canvas.height >> 8) & 0xFF, canvas.height & 0xFF];
-        await niimbotCharacteristic.writeValueWithoutResponse(createNiimbotPacket(0x13, dimensionData)); // Set Page Size
+        // Trimitem dimensiunile corect: înălțime, apoi lățime
+        const dimensionData = [(canvas.height >> 8) & 0xFF, canvas.height & 0xFF, (canvas.width >> 8) & 0xFF, canvas.width & 0xFF];
+        await niimbotCharacteristic.writeValueWithoutResponse(createNiimbotPacket(0x13, dimensionData));
         
         await niimbotCharacteristic.writeValueWithoutResponse(createNiimbotPacket(0x15, [0, 1]));       // Set Quantity
 
         statusP.textContent = 'Se transferă datele etichetei...';
         for (const packet of imagePackets) {
             await niimbotCharacteristic.writeValueWithoutResponse(packet);
-            await delay(10);
+            await delay(15); // Mărit delay-ul pentru siguranță pe mobil
         }
         
         await niimbotCharacteristic.writeValueWithoutResponse(createNiimbotPacket(0xE3, [1]));       // End Page Print
         await niimbotCharacteristic.writeValueWithoutResponse(createNiimbotPacket(0xF3, [1]));       // End Print
-        // --- SFÂRȘIT SECVENȚA CORECTATĂ ---
 
         statusP.textContent = 'Comandă trimisă cu succes!';
     } catch (error) {
