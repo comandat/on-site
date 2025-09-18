@@ -16,7 +16,7 @@
     <div class="text-center">
         <span class="material-symbols-outlined text-6xl text-blue-600">print</span>
         <h1 class="text-2xl font-bold text-gray-800 mt-2">
-            Control Imprimantă <span class="text-sm font-normal text-gray-400">v-niimprintx-5</span>
+            Control Imprimantă <span class="text-sm font-normal text-gray-400">v-niimprintx-6</span>
         </h1>
         <p id="status" class="text-gray-500 mt-1">Conectează-te pentru a putea imprima.</p>
     </div>
@@ -173,81 +173,92 @@ async function connectToPrinter() {
     }
 }
 
-// ÎNLOCUIEȘTE COMPLET FUNCȚIA EXISTENTĂ 'printLabel' CU ACEASTA
-// ÎNLOCUIEȘTE COMPLET FUNCȚIA EXISTENTĂ 'printLabel' CU ACEASTA
 async function printLabel(textToPrint) {
-    if (!niimbotCharacteristic) { alert("Imprimanta nu este conectată."); return; }
-    if (!textToPrint) { alert("Introduceți un text pentru a imprima."); return; }
+    if (!niimbotCharacteristic) {
+        alert("Imprimanta nu este conectată.");
+        return;
+    }
+    if (!textToPrint) {
+        alert("Introduceți un text pentru a imprima.");
+        return;
+    }
 
     try {
         statusP.textContent = 'Se pregătește eticheta...';
 
-        // --- ETAPA 1: Creăm imaginea originală, orizontală (240x120) ---
-        const originalCanvas = createTextImage(textToPrint, 240, 120);
+        // --- MODIFICARE: Inversează lățimea și înălțimea ---
+        const labelWidth = 240;
+        const labelHeight = 120;
 
-        // --- ETAPA 2: Creăm un nou canvas pentru imaginea rotită ---
-        // Dimensiunile se inversează: lățimea nouă = înălțimea veche, și invers.
-        const rotatedCanvas = document.createElement('canvas');
-        rotatedCanvas.width = originalCanvas.height;  // Lățime nouă: 120px
-        rotatedCanvas.height = originalCanvas.width;   // Înălțime nouă: 240px
-        const rotatedCtx = rotatedCanvas.getContext('2d');
+        const canvas = document.createElement('canvas');
+        canvas.width = labelHeight; // Lățimea canvas-ului devine înălțimea etichetei
+        canvas.height = labelWidth; // Înălțimea canvas-ului devine lățimea etichetei
 
-        // Rotim contextul cu -90 de grade în jurul noului colț stânga-jos
-        rotatedCtx.translate(0, rotatedCanvas.height);
-        rotatedCtx.rotate(-Math.PI / 2);
+        const ctx = canvas.getContext('2d');
+
+        // --- MODIFICARE: Rotește contextul și desenează textul ---
+        ctx.fillStyle = 'black';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
         
-        // Desenăm imaginea originală în contextul rotit
-        rotatedCtx.drawImage(originalCanvas, 0, 0);
+        ctx.save(); // Salvează starea curentă a contextului
+        ctx.translate(canvas.width / 2, canvas.height / 2); // Mută originea în centrul canvas-ului
+        ctx.rotate(90 * Math.PI / 180); // Rotește cu 90 de grade
+        
+        ctx.fillStyle = 'white';
+        ctx.font = 'bold 90px Arial';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        // Desenează textul la coordonatele 0,0 (care este acum centrul rotit)
+        ctx.fillText(textToPrint, 0, 0); 
+        ctx.restore(); // Restaurează starea originală a contextului
 
-        // --- ETAPA 3: Extragem datele din imaginea ROTITĂ ---
-        const imageData = rotatedCtx.getImageData(0, 0, rotatedCanvas.width, rotatedCanvas.height);
+        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+
         const imagePackets = [];
-        // Lățimea în octeți a imaginii rotite (120px / 8 = 15 octeți)
-        const widthInBytes = Math.ceil(rotatedCanvas.width / 8);
+        const widthInBytes = Math.ceil(canvas.width / 8);
 
-        // --- ETAPA 4: Encodăm imaginea rotită, linie cu linie (acum sunt 240 de linii) ---
-        for (let y = 0; y < rotatedCanvas.height; y++) {
+        for (let y = 0; y < canvas.height; y++) {
             let lineBytes = new Uint8Array(widthInBytes);
-            for (let x = 0; x < rotatedCanvas.width; x++) {
-                const pixelIndex = (y * rotatedCanvas.width + x) * 4;
+            for (let x = 0; x < canvas.width; x++) {
+                const pixelIndex = (y * canvas.width + x) * 4;
                 const pixelValue = imageData.data[pixelIndex] > 128 ? 1 : 0;
                 if (pixelValue === 1) {
                     lineBytes[Math.floor(x / 8)] |= (1 << (7 - (x % 8)));
                 }
             }
-            
-            const header = [ (y >> 8) & 0xFF, y & 0xFF, 0, 0, 0, 1 ];
+
+            const header = [(y >> 8) & 0xFF, y & 0xFF, 0, 0, 0, 1];
             const dataPayload = Array.from(new Uint8Array([...header, ...lineBytes]));
+
             imagePackets.push(createNiimbotPacket(0x85, dataPayload));
         }
-        
+
         const delay = ms => new Promise(res => setTimeout(res, ms));
-        
+
         statusP.textContent = 'Se trimit comenzile...';
 
-        // Trimitem comenzile de configurare
-        await sendCommandAndWait(niimbotCharacteristic, createNiimbotPacket(0x21, [3]));
-        await sendCommandAndWait(niimbotCharacteristic, createNiimbotPacket(0x23, [1]));
-        await sendCommandAndWait(niimbotCharacteristic, createNiimbotPacket(0x01, [1]));
-        await sendCommandAndWait(niimbotCharacteristic, createNiimbotPacket(0x03, [1]));
-        
-        // --- ETAPA 5: Trimitem dimensiunile ROTITE ---
+        await sendCommandAndWait(niimbotCharacteristic, createNiimbotPacket(0x21, [3])); // Set Density
+        await sendCommandAndWait(niimbotCharacteristic, createNiimbotPacket(0x23, [1])); // Set Label Type
+        await sendCommandAndWait(niimbotCharacteristic, createNiimbotPacket(0x01, [1])); // Start Print
+        await sendCommandAndWait(niimbotCharacteristic, createNiimbotPacket(0x03, [1])); // Start Page Print
+
+        // --- MODIFICARE: Trimite dimensiunile corecte (înălțime, apoi lățime) ---
         const dimensionData = [
-            (rotatedCanvas.height >> 8) & 0xFF, rotatedCanvas.height & 0xFF, // Înălțime = 240
-            (rotatedCanvas.width >> 8) & 0xFF,  rotatedCanvas.width & 0xFF   // Lățime = 120
+            (canvas.height >> 8) & 0xFF, canvas.height & 0xFF,
+            (canvas.width >> 8) & 0xFF, canvas.width & 0xFF
         ];
         await sendCommandAndWait(niimbotCharacteristic, createNiimbotPacket(0x13, dimensionData));
-        
-        await sendCommandAndWait(niimbotCharacteristic, createNiimbotPacket(0x15, [0, 1]));
+
+        await sendCommandAndWait(niimbotCharacteristic, createNiimbotPacket(0x15, [0, 1])); // Set Quantity
 
         statusP.textContent = 'Se transferă datele etichetei...';
         for (const packet of imagePackets) {
             await niimbotCharacteristic.writeValueWithoutResponse(packet);
             await delay(20);
         }
-        
-        await sendCommandAndWait(niimbotCharacteristic, createNiimbotPacket(0xE3, [1]));
-        await sendCommandAndWait(niimbotCharacteristic, createNiimbotPacket(0xF3, [1]));
+
+        await sendCommandAndWait(niimbotCharacteristic, createNiimbotPacket(0xE3, [1])); // End Page Print
+        await sendCommandAndWait(niimbotCharacteristic, createNiimbotPacket(0xF3, [1])); // End Print
 
         statusP.textContent = 'Comandă trimisă cu succes!';
     } catch (error) {
