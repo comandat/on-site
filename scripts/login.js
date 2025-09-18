@@ -42,12 +42,11 @@ document.addEventListener('DOMContentLoaded', () => {
             const responseData = await response.json();
             console.log("Răspuns primit de la webhook:", responseData);
             
-            const body = responseData[0]?.response?.body;
-
-            if (body && body.status === 'success' && body.data) {
-                sessionStorage.setItem('loggedInUser', body.user);
-                // Acum folosim direct datele de la webhook
-                const transformedCommands = transformData(body.data);
+            // --- MODIFICARE CHEIE AICI ---
+            // Acum verificăm direct `responseData` în loc de o structură complexă.
+            if (responseData && responseData.status === 'success' && responseData.data) {
+                sessionStorage.setItem('loggedInUser', responseData.user);
+                const transformedCommands = transformData(responseData.data);
                 localStorage.setItem('commandsData', JSON.stringify(transformedCommands));
                 sessionStorage.setItem('isLoggedIn', 'true');
                 window.location.href = 'main.html';
@@ -75,12 +74,8 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // --- MODIFICARE CHEIE AICI ---
-    // Functia de transformare a datelor nu mai adauga produse default.
-    // Se asteapta ca `rawData` sa contina deja produsele.
     const transformData = (rawData) => {
         return Object.keys(rawData).map(commandId => {
-            // rawData[commandId] ar trebui sa fie acum un array de produse
             const products = rawData[commandId]; 
             
             return {
@@ -88,7 +83,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 name: `Comanda #${commandId.substring(0, 12)}`,
                 date: new Date().toLocaleDateString('ro-RO'),
                 status: 'În Desfășurare',
-                products: products || [] // Folosim produsele primite sau un array gol
+                products: products || [] 
             };
         });
     };
