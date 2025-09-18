@@ -16,7 +16,7 @@
     <div class="text-center">
         <span class="material-symbols-outlined text-6xl text-blue-600">print</span>
         <h1 class="text-2xl font-bold text-gray-800 mt-2">
-            Control Imprimantă <span class="text-sm font-normal text-gray-400">v-final</span>
+            Control Imprimantă <span class="text-sm font-normal text-gray-400">v-final-2</span>
         </h1>
         <p id="status" class="text-gray-500 mt-1">Conectează-te pentru a putea imprima.</p>
     </div>
@@ -49,7 +49,7 @@
 </div>
 
 <script>
-// --- COD FINAL DE IMPRIMARE (v-final) ---
+// --- COD FINAL DE IMPRIMARE (v-final-2) ---
 
 const connectBtn = document.getElementById('connect-btn');
 const printBtn = document.getElementById('print-btn');
@@ -60,8 +60,9 @@ const connectionText = document.getElementById('connection-text');
 
 let niimbotCharacteristic = null;
 
-// Folosim UUID-ul de Serviciu pe care l-am confirmat că este corect
-const CORRECT_SERVICE_UUID = '49535343-fe7d-4ae5-8fa9-9fafd205e455';
+// Acesta este UUID-ul de serviciu folosit de majoritatea imprimantelor, conform documentației.
+// Îl folosim ca filtru opțional pentru a ajuta browser-ul.
+const NIIMBOT_SERVICE_UUID = 'e7810a71-73ae-499d-8c15-faa9aef0c3f2';
 
 function createNiimbotPacket(type, data) {
     const dataBytes = Array.isArray(data) ? data : [data];
@@ -91,29 +92,37 @@ async function connectToPrinter() {
         return;
     }
     try {
-        statusP.textContent = 'Se caută imprimanta...';
+        statusP.textContent = 'Se caută imprimante...';
         
-        // Căutăm imprimanta care expune serviciul corect
+        // Căutăm toate dispozitivele al căror nume începe cu "D"
         const device = await navigator.bluetooth.requestDevice({
-            filters: [{ services: [CORRECT_SERVICE_UUID] }]
+            filters: [{ namePrefix: 'D' }],
+            optionalServices: [NIIMBOT_SERVICE_UUID] // Ajută la descoperire
         });
         
         statusP.textContent = `Conectare la ${device.name}...`;
         const server = await device.gatt.connect();
         
-        statusP.textContent = 'Se accesează serviciul de imprimare...';
-        const service = await server.getPrimaryService(CORRECT_SERVICE_UUID);
-        
+        statusP.textContent = 'Se caută serviciile disponibile...';
+        const services = await server.getPrimaryServices();
+        if (services.length === 0) {
+            statusP.textContent = 'Eroare: Nu am găsit niciun serviciu pe acest dispozitiv.';
+            return;
+        }
+
         statusP.textContent = 'Se caută caracteristica potrivită...';
-        const characteristics = await service.getCharacteristics();
         
-        // Căutăm dinamic caracteristica ce are proprietățile necesare
+        // Căutăm dinamic caracteristica potrivită pe TOATE serviciile
         let foundCharacteristic = null;
-        for (const char of characteristics) {
-            if (char.properties.writeWithoutResponse && char.properties.notify) {
-                foundCharacteristic = char;
-                break; // Am găsit-o, ne oprim
+        for (const service of services) {
+            const characteristics = await service.getCharacteristics();
+            for (const char of characteristics) {
+                if (char.properties.writeWithoutResponse && char.properties.notify) {
+                    foundCharacteristic = char;
+                    break; 
+                }
             }
+            if (foundCharacteristic) break;
         }
 
         if (!foundCharacteristic) {
