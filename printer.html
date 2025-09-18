@@ -3,50 +3,64 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Control Imprimantă NIIMBOT</title>
-    <script src="https://cdn.tailwindcss.com"></script>
+    <title>Imprimante - Manager Stocuri</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;900&display=swap" rel="stylesheet"/>
     <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet"/>
-    <script src="https://cdn.jsdelivr.net/npm/qrcode-generator/qrcode.js"></script>
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <link rel="stylesheet" href="style.css">
     <style>
         .dot { height: 10px; width: 10px; border-radius: 50%; display: inline-block; }
     </style>
 </head>
-<body class="bg-gray-100 flex items-center justify-center min-h-screen">
+<body class="bg-gray-100">
 
-<div class="w-full max-w-md mx-auto bg-white rounded-2xl shadow-lg p-6">
-    <div class="text-center">
-        <span class="material-symbols-outlined text-6xl text-blue-600">print</span>
-        <h1 class="text-2xl font-bold text-gray-800 mt-2">
-            Control Imprimantă <span class="text-sm font-normal text-gray-400">v-niimprintx-12</span>
-        </h1>
-        <p id="status" class="text-gray-500 mt-1">Conectează-te pentru a putea imprima.</p>
-    </div>
+<div class="flex h-full w-full flex-col">
+    <header class="flex items-center justify-between border-b border-gray-200 bg-white p-4">
+        <a href="index.html" class="flex h-10 w-10 items-center justify-center rounded-full text-gray-600 hover:bg-gray-100">
+            <span class="material-symbols-outlined">arrow_back</span>
+        </a>
+        <h1 class="flex-1 text-center text-xl font-bold text-gray-800">Conectare la Imprimantă</h1>
+        <div class="w-10"></div>
+    </header>
 
-    <div class="mt-6">
-        <button id="connect-btn" class="w-full flex items-center justify-center gap-2 rounded-lg bg-blue-600 py-3 text-base font-bold text-white shadow-md hover:bg-blue-700">
-            <span class="material-symbols-outlined">bluetooth_searching</span>
-            Conectare la Imprimantă
-        </button>
-        <div class="mt-2 flex items-center justify-center gap-2">
-            <span id="connection-dot" class="dot bg-gray-400"></span>
-            <span id="connection-text" class="text-xs text-gray-500">Deconectat</span>
+    <main class="flex-1 overflow-y-auto p-4">
+        <div class="mx-auto max-w-md">
+            <div class="w-full bg-white rounded-2xl shadow-lg p-6">
+                <div class="text-center">
+                    <span class="material-symbols-outlined text-6xl text-blue-600">print</span>
+                    <h2 id="status" class="text-gray-500 mt-2">Apasă pentru a te conecta</h2>
+                </div>
+
+                <div class="mt-6">
+                    <button id="connect-btn" class="w-full flex items-center justify-center gap-2 rounded-lg bg-blue-600 py-3 text-base font-bold text-white shadow-md hover:bg-blue-700">
+                        <span class="material-symbols-outlined">bluetooth_searching</span>
+                        Caută Imprimantă
+                    </button>
+                    <div class="mt-2 flex items-center justify-center gap-2">
+                        <span id="connection-dot" class="dot bg-gray-400"></span>
+                        <span id="connection-text" class="text-xs text-gray-500">Deconectat</span>
+                    </div>
+                </div>
+            </div>
         </div>
-    </div>
+    </main>
 
-    <hr class="my-6 border-gray-200">
-
-    <div>
-        <label for="print-text-input" class="block text-sm font-medium text-gray-700">Cod pentru QR și Text:</label>
-        <input type="text" id="print-text-input" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm" value="B08ZSFS4J6CN" placeholder="ex: B08ZSFS4J6CN">
-        
-        <button id="print-btn" class="mt-4 w-full rounded-lg bg-gray-300 py-3 text-base font-bold text-white cursor-not-allowed" disabled>
-            Imprimă Eticheta
-        </button>
-    </div>
-    
-    <div class="text-center mt-6">
-         <a href="products.html" class="text-sm text-blue-600 hover:underline">Înapoi la Produse</a>
-    </div>
+    <footer class="border-t border-gray-200 bg-white">
+        <div class="mx-auto flex max-w-md justify-around">
+            <a href="index.html" class="flex flex-col items-center gap-1 p-2 text-gray-500 hover:text-[var(--primary-color)]">
+                <span class="material-symbols-outlined">apps</span>
+                <span class="text-xs">Comenzi</span>
+            </a>
+            <a href="products.html" class="flex flex-col items-center gap-1 p-2 text-gray-500 hover:text-[var(--primary-color)]">
+                <span class="material-symbols-outlined">inventory_2</span>
+                <span class="text-xs">Produse</span>
+            </a>
+            <a href="printer.html" class="flex flex-col items-center gap-1 p-2 text-[var(--primary-color)]">
+                <span class="material-symbols-outlined">print</span>
+                <span class="text-xs">Imprimante</span>
+            </a>
+        </div>
+    </footer>
 </div>
 
 <script src="scripts/printer.js"></script>
