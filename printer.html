@@ -16,7 +16,7 @@
     <div class="text-center">
         <span class="material-symbols-outlined text-6xl text-blue-600">print</span>
         <h1 class="text-2xl font-bold text-gray-800 mt-2">
-            Control Imprimantă <span class="text-sm font-normal text-gray-400">v-final-2</span>
+            Control Imprimantă <span class="text-sm font-normal text-gray-400">v-final-corectat</span>
         </h1>
         <p id="status" class="text-gray-500 mt-1">Conectează-te pentru a putea imprima.</p>
     </div>
@@ -49,7 +49,7 @@
 </div>
 
 <script>
-// --- COD FINAL DE IMPRIMARE (v-final-2) ---
+// --- COD FINAL DE IMPRIMARE (v-final-corectat) ---
 
 const connectBtn = document.getElementById('connect-btn');
 const printBtn = document.getElementById('print-btn');
@@ -59,10 +59,6 @@ const connectionDot = document.getElementById('connection-dot');
 const connectionText = document.getElementById('connection-text');
 
 let niimbotCharacteristic = null;
-
-// Acesta este UUID-ul de serviciu folosit de majoritatea imprimantelor, conform documentației.
-// Îl folosim ca filtru opțional pentru a ajuta browser-ul.
-const NIIMBOT_SERVICE_UUID = 'e7810a71-73ae-499d-8c15-faa9aef0c3f2';
 
 function createNiimbotPacket(type, data) {
     const dataBytes = Array.isArray(data) ? data : [data];
@@ -94,25 +90,19 @@ async function connectToPrinter() {
     try {
         statusP.textContent = 'Se caută imprimante...';
         
-        // Căutăm toate dispozitivele al căror nume începe cu "D"
         const device = await navigator.bluetooth.requestDevice({
             filters: [{ namePrefix: 'D' }],
-            optionalServices: [NIIMBOT_SERVICE_UUID] // Ajută la descoperire
+            optionalServices: ['e7810a71-73ae-499d-8c15-faa9aef0c3f2']
         });
         
         statusP.textContent = `Conectare la ${device.name}...`;
         const server = await device.gatt.connect();
         
-        statusP.textContent = 'Se caută serviciile disponibile...';
+        statusP.textContent = 'Se accesează serviciile...';
         const services = await server.getPrimaryServices();
-        if (services.length === 0) {
-            statusP.textContent = 'Eroare: Nu am găsit niciun serviciu pe acest dispozitiv.';
-            return;
-        }
-
+        
         statusP.textContent = 'Se caută caracteristica potrivită...';
         
-        // Căutăm dinamic caracteristica potrivită pe TOATE serviciile
         let foundCharacteristic = null;
         for (const service of services) {
             const characteristics = await service.getCharacteristics();
@@ -169,22 +159,33 @@ async function printLabel(textToPrint) {
             imagePackets.push(createNiimbotPacket(0x85, Array.from(new Uint8Array([...header, ...lineBytes]))));
         }
         const delay = ms => new Promise(res => setTimeout(res, ms));
+        
         statusP.textContent = 'Se trimit comenzile...';
-        await niimbotCharacteristic.writeValueWithoutResponse(createNiimbotPacket(0x21, [3]));
-        await niimbotCharacteristic.writeValueWithoutResponse(createNiimbotPacket(0x23, [1]));
-        await niimbotCharacteristic.writeValueWithoutResponse(createNiimbotPacket(0x01, [1]));
-        await niimbotCharacteristic.writeValueWithoutResponse(createNiimbotPacket(0x03, [1]));
-        const dimensionData = [(canvas.width >> 8) & 0xFF, canvas.width & 0xFF, (canvas.height >> 8) & 0xFF, canvas.height & 0xFF];
-        await niimbotCharacteristic.writeValueWithoutResponse(createNiimbotPacket(0x13, dimensionData));
-        await niimbotCharacteristic.writeValueWithoutResponse(createNiimbotPacket(0x15, [1, 0]));
+        
+        // --- SECVENȚA DE COMENZI A FOST CORECTATĂ ---
+        await niimbotCharacteristic.writeValueWithoutResponse(createNiimbotPacket(0x21, [3]));       // Set Density
+        await niimbotCharacteristic.writeValueWithoutResponse(createNiimbotPacket(0x23, [1]));       // Set Label Type
+        await niimbotCharacteristic.writeValueWithoutResponse(createNiimbotPacket(0x01, [1]));       // Start Print
+        
+        await niimbotCharacteristic.writeValueWithoutResponse(createNiimbotPacket(0x20, [1]));       // CORECTARE: Adăugat Print Clear
+        await niimbotCharacteristic.writeValueWithoutResponse(createNiimbotPacket(0x03, [1]));       // Start Page Print
+        
+        // CORECTARE: Inversat width cu height și formatat corect cantitatea
+        const dimensionData = [(canvas.height >> 8) & 0xFF, canvas.height & 0xFF, (canvas.width >> 8) & 0xFF, canvas.width & 0xFF];
+        await niimbotCharacteristic.writeValueWithoutResponse(createNiimbotPacket(0x13, dimensionData)); // Set Dimension
+        await niimbotCharacteristic.writeValueWithoutResponse(createNiimbotPacket(0x15, [0, 1]));       // Set Quantity (1 copie)
+
         statusP.textContent = 'Se transferă datele etichetei...';
         for (const packet of imagePackets) {
             await niimbotCharacteristic.writeValueWithoutResponse(packet);
             await delay(5);
         }
-        await niimbotCharacteristic.writeValueWithoutResponse(createNiimbotPacket(0xE3, [1]));
-        await niimbotCharacteristic.writeValueWithoutResponse(createNiimbotPacket(0xF3, [1]));
-        statusP.textContent = 'Comandă trimisă cu succes! Gata de o nouă imprimare.';
+        
+        await niimbotCharacteristic.writeValueWithoutResponse(createNiimbotPacket(0xE3, [1]));       // End Page Print
+        await niimbotCharacteristic.writeValueWithoutResponse(createNiimbotPacket(0xF3, [1]));       // End Print
+        // --- SFÂRȘIT SECVENȚA CORECTATĂ ---
+
+        statusP.textContent = 'Comandă trimisă cu succes!';
     } catch (error) {
         statusP.textContent = `Eroare la imprimare: ${error.message}`;
     }
