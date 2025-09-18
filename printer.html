@@ -177,24 +177,32 @@ async function printLabel(textToPrint) {
     if (!textToPrint) { alert("Introduceți un text pentru a imprima."); return; }
     try {
         statusP.textContent = 'Se pregătește eticheta...';
+        // Creăm pânza cu dimensiunile logice dorite (ex: 240px lățime, 120px înălțime)
         const canvas = createTextImage(textToPrint, 240, 120); 
         const ctx = canvas.getContext('2d');
         const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        
+        // --- MODIFICARE CHEIE: Transpunerea imaginii ---
         const imagePackets = [];
-        const widthInBytes = Math.ceil(canvas.width / 8);
+        // Lățimea noii linii de date (transpuse) va fi înălțimea pânzei
+        const widthInBytes = Math.ceil(canvas.height / 8); 
 
-        for (let y = 0; y < canvas.height; y++) {
+        // Iterăm întâi pe COLOANE (x)
+        for (let x = 0; x < canvas.width; x++) {
             let lineBytes = new Uint8Array(widthInBytes);
-            for (let x = 0; x < canvas.width; x++) {
+            // Apoi iterăm pe RÂNDURI (y) pentru a construi coloana
+            for (let y = 0; y < canvas.height; y++) {
+                // Citim pixelul corespunzător
                 const pixelIndex = (y * canvas.width + x) * 4;
                 const pixelValue = imageData.data[pixelIndex] > 128 ? 1 : 0; 
                 if (pixelValue === 1) {
-                    lineBytes[Math.floor(x / 8)] |= (1 << (7 - (x % 8)));
+                    // Construim octeții pentru noua linie (care e o coloană veche)
+                    lineBytes[Math.floor(y / 8)] |= (1 << (7 - (y % 8)));
                 }
             }
             
-            const header = [ (y >> 8) & 0xFF, y & 0xFF, 0, 0, 0, 1 ];
-            
+            // Numărul liniei este acum indexul coloanei (x)
+            const header = [ (x >> 8) & 0xFF, x & 0xFF, 0, 0, 0, 1 ];
             imagePackets.push(createNiimbotPacket(0x85, Array.from(new Uint8Array([...header, ...lineBytes]))));
         }
         
@@ -202,26 +210,27 @@ async function printLabel(textToPrint) {
         
         statusP.textContent = 'Se trimit comenzile...';
         
-        // --- MODIFICARE: Folosim sendCommandAndWait pentru sincronizare ---
-        await sendCommandAndWait(niimbotCharacteristic, createNiimbotPacket(0x21, [3]));      // Set Density
-        await sendCommandAndWait(niimbotCharacteristic, createNiimbotPacket(0x23, [1]));      // Set Label Type
-        await sendCommandAndWait(niimbotCharacteristic, createNiimbotPacket(0x01, [1]));      // Start Print
-        await sendCommandAndWait(niimbotCharacteristic, createNiimbotPacket(0x03, [1]));      // Start Page Print
+        await sendCommandAndWait(niimbotCharacteristic, createNiimbotPacket(0x21, [3]));
+        await sendCommandAndWait(niimbotCharacteristic, createNiimbotPacket(0x23, [1]));
+        await sendCommandAndWait(niimbotCharacteristic, createNiimbotPacket(0x01, [1]));
+        await sendCommandAndWait(niimbotCharacteristic, createNiimbotPacket(0x03, [1]));
+      
+        // --- MODIFICARE CRITICĂ: Inversăm dimensiunile trimise imprimantei ---
+        // Îi spunem că imaginea este înaltă (canvas.width) și îngustă (canvas.height)
+        const dimensionData = [(canvas.width >> 8) & 0xFF, canvas.width & 0xFF, (canvas.height >> 8) & 0xFF, canvas.height & 0xFF];
+        await sendCommandAndWait(niimbotCharacteristic, createNiimbotPacket(0x13, dimensionData));
         
-        const dimensionData = [(canvas.height >> 8) & 0xFF, canvas.height & 0xFF, (canvas.width >> 8) & 0xFF, canvas.width & 0xFF];
-        await sendCommandAndWait(niimbotCharacteristic, createNiimbotPacket(0x13, dimensionData)); // Set Dimension
-        
-        await sendCommandAndWait(niimbotCharacteristic, createNiimbotPacket(0x15, [0, 1]));    // Set Quantity
+        await sendCommandAndWait(niimbotCharacteristic, createNiimbotPacket(0x15, [0, 1]));
 
         statusP.textContent = 'Se transferă datele etichetei...';
+        // Trimitem pachetele de imagine transpuse
         for (const packet of imagePackets) {
-            // Pentru datele imaginii, nu așteptăm răspuns, dar păstrăm un mic delay
             await niimbotCharacteristic.writeValueWithoutResponse(packet);
             await delay(15); 
         }
         
-        await sendCommandAndWait(niimbotCharacteristic, createNiimbotPacket(0xE3, [1]));      // End Page Print
-        await sendCommandAndWait(niimbotCharacteristic, createNiimbotPacket(0xF3, [1]));      // End Print
+        await sendCommandAndWait(niimbotCharacteristic, createNiimbotPacket(0xE3, [1]));
+        await sendCommandAndWait(niimbotCharacteristic, createNiimbotPacket(0xF3, [1]));
 
         statusP.textContent = 'Comandă trimisă cu succes!';
     } catch (error) {
