@@ -1,8 +1,8 @@
-// --- COD FINAL DE IMPRIMARE (v-niimprintx-10) ---
-
 // Așteaptă ca întregul document HTML să fie încărcat înainte de a rula scriptul
 document.addEventListener('DOMContentLoaded', () => {
     
+    // --- CODUL TĂU ÎNCEPE AICI ---
+
     const connectBtn = document.getElementById('connect-btn');
     const printBtn = document.getElementById('print-btn');
     const textInput = document.getElementById('print-text-input');
@@ -131,10 +131,8 @@ document.addEventListener('DOMContentLoaded', () => {
             ctx.translate(canvas.width / 2, canvas.height / 2);
             ctx.rotate(90 * Math.PI / 180);
 
-            // --- MODIFICARE: Offset-ul vertical ajustat la 10 ---
             const verticalOffset = 10; 
 
-            // ETAPA 1: Generare cod QR
             const qr = qrcode(0, 'M');
             qr.addData(textToPrint);
             qr.make();
@@ -143,7 +141,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
             await new Promise(resolve => { qrImg.onload = resolve; });
 
-            // ETAPA 2: Desenare elemente
             const qrSize = 85; 
             ctx.drawImage(qrImg, -labelWidth / 2 + 15, -labelHeight / 2 + 18 + verticalOffset, qrSize, qrSize);
 
@@ -228,4 +225,5 @@ document.addEventListener('DOMContentLoaded', () => {
     if (textToPrint) {
         textInput.value = textToPrint;
     }
-});
+
+}); // --- SFÂRȘITUL BLOCULUI DOMContentLoaded ---
