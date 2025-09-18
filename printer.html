@@ -16,7 +16,7 @@
     <div class="text-center">
         <span class="material-symbols-outlined text-6xl text-blue-600">print</span>
         <h1 class="text-2xl font-bold text-gray-800 mt-2">
-            Control Imprimantă <span class="text-sm font-normal text-gray-400">v-niimprintx-2</span>
+            Control Imprimantă <span class="text-sm font-normal text-gray-400">v-niimprintx-3</span>
         </h1>
         <p id="status" class="text-gray-500 mt-1">Conectează-te pentru a putea imprima.</p>
     </div>
@@ -177,32 +177,51 @@ async function printLabel(textToPrint) {
     if (!textToPrint) { alert("Introduceți un text pentru a imprima."); return; }
     try {
         statusP.textContent = 'Se pregătește eticheta...';
-        // Creăm pânza cu dimensiunile logice dorite (ex: 240px lățime, 120px înălțime)
-        const canvas = createTextImage(textToPrint, 240, 120); 
-        const ctx = canvas.getContext('2d');
-        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
         
-        // --- MODIFICARE CHEIE: Transpunerea imaginii ---
-        const imagePackets = [];
-        // Lățimea noii linii de date (transpuse) va fi înălțimea pânzei
-        const widthInBytes = Math.ceil(canvas.height / 8); 
+        // --- ETAPA 1: Creăm imaginea originală (ex: 240x120) ---
+        const originalCanvas = createTextImage(textToPrint, 240, 120); 
 
-        // Iterăm întâi pe COLOANE (x)
-        for (let x = 0; x < canvas.width; x++) {
+        // --- ETAPA 2: Rotim imaginea într-un canvas nou (rezultat: 120x240) ---
+        const rotatedCanvas = document.createElement('canvas');
+        rotatedCanvas.width = originalCanvas.height;  // Lățimea nouă = înălțimea veche (120)
+        rotatedCanvas.height = originalCanvas.width;   // Înălțimea nouă = lățimea veche (240)
+        const rotatedCtx = rotatedCanvas.getContext('2d');
+        rotatedCtx.translate(0, originalCanvas.width); // Mutăm originea în colțul stânga-jos
+        rotatedCtx.rotate(-Math.PI / 2);               // Rotim cu -90 de grade
+        rotatedCtx.drawImage(originalCanvas, 0, 0);    // Desenăm imaginea originală
+
+        // --- ETAPA 3: Creăm un canvas final cu padding pentru a centra imaginea ---
+        const printerWidth = 240; // Presupunem că lățimea maximă a imprimantei este 240px
+        const finalCanvas = document.createElement('canvas');
+        finalCanvas.width = printerWidth;              // Lățime finală = lățimea imprimantei
+        finalCanvas.height = rotatedCanvas.height;     // Înălțime finală = înălțimea imaginii rotite (240)
+        const finalCtx = finalCanvas.getContext('2d');
+        
+        // Umplem fundalul cu negru (care nu se imprimă)
+        finalCtx.fillStyle = 'black';
+        finalCtx.fillRect(0, 0, finalCanvas.width, finalCanvas.height);
+        
+        // Calculăm padding-ul necesar pentru a centra pe orizontală
+        const horizontalPadding = (printerWidth - rotatedCanvas.width) / 2; // (240 - 120) / 2 = 60px
+        
+        // Desenăm imaginea rotită în centrul canvas-ului final
+        finalCtx.drawImage(rotatedCanvas, horizontalPadding, 0);
+
+        // --- ETAPA 4: Encodăm imaginea finală (cea cu padding) în pachete ---
+        const imageData = finalCtx.getImageData(0, 0, finalCanvas.width, finalCanvas.height);
+        const imagePackets = [];
+        const widthInBytes = Math.ceil(finalCanvas.width / 8);
+
+        for (let y = 0; y < finalCanvas.height; y++) {
             let lineBytes = new Uint8Array(widthInBytes);
-            // Apoi iterăm pe RÂNDURI (y) pentru a construi coloana
-            for (let y = 0; y < canvas.height; y++) {
-                // Citim pixelul corespunzător
-                const pixelIndex = (y * canvas.width + x) * 4;
+            for (let x = 0; x < finalCanvas.width; x++) {
+                const pixelIndex = (y * finalCanvas.width + x) * 4;
                 const pixelValue = imageData.data[pixelIndex] > 128 ? 1 : 0; 
                 if (pixelValue === 1) {
-                    // Construim octeții pentru noua linie (care e o coloană veche)
-                    lineBytes[Math.floor(y / 8)] |= (1 << (7 - (y % 8)));
+                    lineBytes[Math.floor(x / 8)] |= (1 << (7 - (x % 8)));
                 }
             }
-            
-            // Numărul liniei este acum indexul coloanei (x)
-            const header = [ (x >> 8) & 0xFF, x & 0xFF, 0, 0, 0, 1 ];
+            const header = [ (y >> 8) & 0xFF, y & 0xFF, 0, 0, 0, 1 ];
             imagePackets.push(createNiimbotPacket(0x85, Array.from(new Uint8Array([...header, ...lineBytes]))));
         }
         
@@ -210,20 +229,19 @@ async function printLabel(textToPrint) {
         
         statusP.textContent = 'Se trimit comenzile...';
         
+        // Protocolul de imprimare
         await sendCommandAndWait(niimbotCharacteristic, createNiimbotPacket(0x21, [3]));
         await sendCommandAndWait(niimbotCharacteristic, createNiimbotPacket(0x23, [1]));
         await sendCommandAndWait(niimbotCharacteristic, createNiimbotPacket(0x01, [1]));
         await sendCommandAndWait(niimbotCharacteristic, createNiimbotPacket(0x03, [1]));
       
-        // --- MODIFICARE CRITICĂ: Inversăm dimensiunile trimise imprimantei ---
-        // Îi spunem că imaginea este înaltă (canvas.width) și îngustă (canvas.height)
-        const dimensionData = [(canvas.width >> 8) & 0xFF, canvas.width & 0xFF, (canvas.height >> 8) & 0xFF, canvas.height & 0xFF];
+        // --- ETAPA 5: Trimitem dimensiunile canvas-ului FINAL ---
+        const dimensionData = [(finalCanvas.height >> 8) & 0xFF, finalCanvas.height & 0xFF, (finalCanvas.width >> 8) & 0xFF, finalCanvas.width & 0xFF];
         await sendCommandAndWait(niimbotCharacteristic, createNiimbotPacket(0x13, dimensionData));
         
         await sendCommandAndWait(niimbotCharacteristic, createNiimbotPacket(0x15, [0, 1]));
 
         statusP.textContent = 'Se transferă datele etichetei...';
-        // Trimitem pachetele de imagine transpuse
         for (const packet of imagePackets) {
             await niimbotCharacteristic.writeValueWithoutResponse(packet);
             await delay(15); 
