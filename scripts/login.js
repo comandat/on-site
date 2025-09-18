@@ -10,7 +10,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const accessCodeInput = document.getElementById('access-code');
     const errorMessage = document.getElementById('error-message');
     const loginButton = document.getElementById('login-button');
-    const scanButton = document.getElementById('scan-button');
 
     if (!loginForm) {
         console.error("Eroare critică: Formularul cu ID-ul 'login-form' nu a fost găsit.");
@@ -43,14 +42,18 @@ document.addEventListener('DOMContentLoaded', () => {
             console.log("Răspuns primit de la webhook:", responseData);
             
             // --- MODIFICARE CHEIE AICI ---
-            // Acum verificăm direct `responseData` în loc de o structură complexă.
-            if (responseData && responseData.status === 'success' && responseData.data) {
+            if (responseData && responseData.status === 'success') {
+                // Cazul de succes
                 sessionStorage.setItem('loggedInUser', responseData.user);
                 const transformedCommands = transformData(responseData.data);
                 localStorage.setItem('commandsData', JSON.stringify(transformedCommands));
                 sessionStorage.setItem('isLoggedIn', 'true');
                 window.location.href = 'main.html';
+            } else if (responseData && responseData.status === 'failed') {
+                // Cazul in care parola e gresita
+                errorMessage.textContent = 'Date incorecte';
             } else {
+                // Orice alt caz (format neasteptat, etc.)
                 errorMessage.textContent = 'Răspuns invalid de la server.';
             }
         } catch (error) {
@@ -77,7 +80,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const transformData = (rawData) => {
         return Object.keys(rawData).map(commandId => {
             const products = rawData[commandId]; 
-            
             return {
                 id: commandId,
                 name: `Comanda #${commandId.substring(0, 12)}`,
