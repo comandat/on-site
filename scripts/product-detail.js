@@ -7,7 +7,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const detailPageState = { 'new': 0, 'very-good': 0, 'good': 0, 'broken': 0 };
     
     // --- Functii principale ---
-    function loadProductDetails() {
+    async function loadProductDetails() {
         // Preluam ID-urile din sessionStorage
         currentCommandId = sessionStorage.getItem('currentCommandId');
         currentProductId = sessionStorage.getItem('currentProductId');
@@ -17,6 +17,23 @@ document.addEventListener('DOMContentLoaded', () => {
             window.location.href = 'main.html';
             return;
         }
+        
+        currentProduct = getProductById(currentCommandId, currentProductId);
+        
+        if (!currentProduct) {
+            alert("Produsul nu a fost găsit în această comandă!");
+            window.location.href = `products.html`;
+            return;
+        }
+        
+        // Preluam detaliile de la webhook
+        const details = await fetchProductDetails(currentProduct.asin);
+        const productName = details.title || 'Detaliile nu au putut fi încărcate';
+        const imageUrl = details.images && details.images.length > 0 ? details.images[0] : '';
+
+
+        document.getElementById('product-detail-title').textContent = productName;
+        document.getElementById('product-detail-image').style.backgroundImage = `url('${imageUrl}')`;
         
         currentProduct = getProductById(currentCommandId, currentProductId);
         
@@ -54,3 +71,4 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- Initial Load ---
     loadProductDetails();
 });
+
