@@ -79,14 +79,36 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const transformData = (rawData) => {
         return Object.keys(rawData).map(commandId => {
-            const products = rawData[commandId]; 
+            const products = rawData[commandId] || [];
+            
+            const transformedProducts = products.map(product => {
+                // Folosim productsku ca ID unic pentru produs
+                return {
+                    id: product.productsku, 
+                    asin: product.asin, // Stocăm ASIN pentru a prelua imaginea/titlul mai târziu
+                    name: 'Încărcare...', // Nume temporar
+                    imageUrl: '', // URL imagine temporar
+                    expected: product.orderedquantity || 0,
+                    found: (product.bncondition || 0) + (product.vgcondition || 0) + (product.gcondition || 0) + (product.broken || 0),
+                    state: {
+                        'new': product.bncondition || 0,
+                        'very-good': product.vgcondition || 0,
+                        'good': product.gcondition || 0,
+                        'broken': product.broken || 0 // 'broken' rămâne cheia internă
+                    }
+                };
+            });
+
             return {
                 id: commandId,
                 name: `Comanda #${commandId.substring(0, 12)}`,
                 date: new Date().toLocaleDateString('ro-RO'),
                 status: 'În Desfășurare',
-                products: products || [] 
+                products: transformedProducts
             };
         });
     };
+        });
+    };
 });
+
