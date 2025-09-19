@@ -41,19 +41,15 @@ document.addEventListener('DOMContentLoaded', () => {
             const responseData = await response.json();
             console.log("Răspuns primit de la webhook:", responseData);
             
-            // --- MODIFICARE CHEIE AICI ---
             if (responseData && responseData.status === 'success') {
-                // Cazul de succes
                 sessionStorage.setItem('loggedInUser', responseData.user);
                 const transformedCommands = transformData(responseData.data);
                 localStorage.setItem('commandsData', JSON.stringify(transformedCommands));
                 sessionStorage.setItem('isLoggedIn', 'true');
                 window.location.href = 'main.html';
             } else if (responseData && responseData.status === 'failed') {
-                // Cazul in care parola e gresita
                 errorMessage.textContent = 'Date incorecte';
             } else {
-                // Orice alt caz (format neasteptat, etc.)
                 errorMessage.textContent = 'Răspuns invalid de la server.';
             }
         } catch (error) {
@@ -82,19 +78,18 @@ document.addEventListener('DOMContentLoaded', () => {
             const products = rawData[commandId] || [];
             
             const transformedProducts = products.map(product => {
-                // Folosim productsku ca ID unic pentru produs
                 return {
                     id: product.productsku, 
-                    asin: product.asin, // Stocăm ASIN pentru a prelua imaginea/titlul mai târziu
-                    name: 'Încărcare...', // Nume temporar
-                    imageUrl: '', // URL imagine temporar
+                    asin: product.asin,
+                    name: 'Încărcare...',
+                    imageUrl: '',
                     expected: product.orderedquantity || 0,
                     found: (product.bncondition || 0) + (product.vgcondition || 0) + (product.gcondition || 0) + (product.broken || 0),
                     state: {
                         'new': product.bncondition || 0,
                         'very-good': product.vgcondition || 0,
                         'good': product.gcondition || 0,
-                        'broken': product.broken || 0 // 'broken' rămâne cheia internă
+                        'broken': product.broken || 0
                     }
                 };
             });
@@ -108,7 +103,4 @@ document.addEventListener('DOMContentLoaded', () => {
             };
         });
     };
-        });
-    };
 });
-
