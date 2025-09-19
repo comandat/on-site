@@ -38,3 +38,33 @@ export function updateProductState(commandId, productId, newState) {
     }
     saveCommandsData(allCommands);
 }
+// Functie pentru a prelua detalii (titlu, imagine) de la webhook
+export async function fetchProductDetails(asin) {
+    // Verificam daca avem deja datele in cache pentru a nu face request-uri inutile
+    const cachedData = sessionStorage.getItem(`product_${asin}`);
+    if (cachedData) {
+        return JSON.parse(cachedData);
+    }
+
+    const webhookUrl = 'https://automatizare.comandat.ro/webhook/f1bb3c1c-3730-4672-b989-b3e73b911043';
+    try {
+        const response = await fetch(webhookUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ asin: asin }),
+        });
+        if (!response.ok) {
+            throw new Error('Network response was not ok');
+        }
+        const data = await response.json();
+        
+        // Salvam datele in sessionStorage pentru a le reutiliza
+        sessionStorage.setItem(`product_${asin}`, JSON.stringify(data));
+
+        return data;
+    } catch (error) {
+        console.error('Eroare la preluarea detaliilor produsului:', error);
+        // Returnam valori default in caz de eroare
+        return { title: 'Nume indisponibil', images: [''] }; 
+    }
+}
