@@ -1,33 +1,40 @@
+// scripts/products.js
 import { getCommandById } from './data.js';
-// Importam noua functie
-import { fetchProductDetails } from './data.js';
+// Importam noua functie de bulk
+import { fetchProductDetailsInBulk } from './data.js';
 
 document.addEventListener('DOMContentLoaded', () => {
-    // Transformam functia in async pentru a putea folosi 'await'
     async function renderProductsList() {
         const container = document.getElementById('products-list-container');
         if (!container) return;
 
         const commandId = sessionStorage.getItem('currentCommandId');
         if (!commandId) {
-            container.innerHTML = '<p class="p-4 text-center text-red-500">ID-ul comenzii nu a fost găsit. Te rugăm să selectezi o comandă.</p>';
+            container.innerHTML = '<p class="p-4 text-center text-red-500">ID-ul comenzii nu a fost găsit.</p>';
             return;
         }
         
         const command = getCommandById(commandId);
-        if (!command || !command.products) {
-             container.innerHTML = '<p class="p-4 text-center text-gray-500">Comanda nu a fost găsită sau nu are produse.</p>';
+        if (!command || !command.products || command.products.length === 0) {
+             container.innerHTML = '<p class="p-4 text-center text-gray-500">Comanda nu are produse.</p>';
             return;
         }
 
-        container.innerHTML = ''; // Golim containerul
+        container.innerHTML = '<p class="p-4 text-center text-gray-500">Se încarcă produsele...</p>'; // Mesaj de asteptare
+        
+        // Pas 1: Colectam toate ASIN-urile din produsele comenzii
+        const asins = command.products.map(p => p.asin);
+        
+        // Pas 2: Facem un singur request pentru a prelua toate detaliile
+        const allProductDetails = await fetchProductDetailsInBulk(asins);
+        
+        container.innerHTML = ''; // Golim containerul de mesajul de asteptare
 
-        // Folosim Promise.all pentru a astepta toate request-urile sa se termine
-        await Promise.all(command.products.map(async (product) => {
-            // Preluam dinamic detaliile pentru fiecare produs
-            const details = await fetchProductDetails(product.asin);
-            const productName = details.title || product.name;
-            const imageUrl = details.images && details.images.length > 0 ? details.images[0] : product.imageUrl;
+        // Pas 3: Construim elementele HTML folosind detaliile primite
+        command.products.forEach(product => {
+            const details = allProductDetails[product.asin];
+            const productName = details?.title || 'Nume indisponibil';
+            const imageUrl = details?.images?.[0] || '';
 
             const productEl = document.createElement('a');
             productEl.href = `product-detail.html`;
@@ -43,13 +50,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
             productEl.addEventListener('click', (event) => {
                 event.preventDefault();
-                // Salvam ID-ul produsului (productsku)
                 sessionStorage.setItem('currentProductId', product.id);
                 window.location.href = event.currentTarget.href;
             });
 
             container.appendChild(productEl);
-        }));
+        });
     }
 
     renderProductsList();
