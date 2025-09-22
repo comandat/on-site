@@ -63,7 +63,9 @@ export async function fetchProductDetailsInBulk(asins) {
                 throw new Error('Network response was not ok');
             }
             // Raspunsul de la n8n trebuie sa fie un obiect de tipul: { "ASIN1": {...}, "ASIN2": {...} }
-            const bulkData = await response.json();
+            // Linia noua
+const responseArray = await response.json();
+const bulkData = responseArray[0].products;
 
             // Pas 3: Procesam raspunsul si actualizam cache-ul
             for (const asin of asinsToFetch) {
@@ -91,3 +93,4 @@ export async function fetchProductDetails(asin) {
     const results = await fetchProductDetailsInBulk([asin]);
     return results[asin];
 }
+
