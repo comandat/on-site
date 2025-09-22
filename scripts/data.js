@@ -1,6 +1,6 @@
 // scripts/data.js
 
-// Functiile getCommandsData, saveCommandsData, etc. raman la fel...
+// Functiile getCommandsData, saveCommandsData, etc. raman neschimbate...
 export function getCommandsData() {
     const data = localStorage.getItem('commandsData');
     return data ? JSON.parse(data) : [];
@@ -31,7 +31,7 @@ export function updateProductState(commandId, productId, newState) {
 }
 
 /**
- * NOU: Preia detalii pentru mai multe produse printr-un singur request.
+ * NOU SI IMBUNATATIT: Preia detalii pentru mai multe produse printr-un singur request.
  * @param {string[]} asins - Un array de coduri ASIN.
  * @returns {Promise<Object>} Un obiect unde cheile sunt ASIN-urile si valorile sunt detaliile produselor.
  */
@@ -40,7 +40,7 @@ export async function fetchProductDetailsInBulk(asins) {
     const results = {};
     const asinsToFetch = [];
 
-    // Pas 1: Verificam ce avem deja in cache pentru a fi eficienti
+    // Pas 1: Verificam ce avem deja in cache
     for (const asin of asins) {
         const cachedData = sessionStorage.getItem(`product_${asin}`);
         if (cachedData) {
@@ -50,47 +50,51 @@ export async function fetchProductDetailsInBulk(asins) {
         }
     }
 
-    // Pas 2: Daca avem ASIN-uri noi de preluat, facem un singur request pentru ele
-    if (asinsToFetch.length > 0) {
-        try {
-            const response = await fetch(webhookUrl, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                // ATENTIE: Trimitem un obiect cu o cheie "asins" care contine array-ul
-                body: JSON.stringify({ asins: asinsToFetch }),
-            });
-            if (!response.ok) {
-                throw new Error('Network response was not ok');
-            }
-            // Raspunsul de la n8n trebuie sa fie un obiect de tipul: { "ASIN1": {...}, "ASIN2": {...} }
-            // Linia noua
-const responseArray = await response.json();
-const bulkData = responseArray[0].products;
+    // Pas 2: Daca nu avem ce prelua, returnam direct ce am gasit in cache
+    if (asinsToFetch.length === 0) {
+        return results;
+    }
 
-            // Pas 3: Procesam raspunsul si actualizam cache-ul
-            for (const asin of asinsToFetch) {
-                const productData = bulkData[asin] || { title: 'Nume indisponibil', images: [''] };
-                sessionStorage.setItem(`product_${asin}`, JSON.stringify(productData));
-                results[asin] = productData;
-            }
+    // Pas 3: Daca avem ASIN-uri noi, facem un singur request pentru ele
+    try {
+        const response = await fetch(webhookUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ asins: asinsToFetch }),
+        });
+        if (!response.ok) {
+            throw new Error('Network response was not ok');
+        }
+        
+        const responseArray = await response.json();
+        
+        // --- AICI ESTE MODIFICAREA CHEIE ---
+        // Verificam daca raspunsul este un array valid si are continut
+        const bulkData = (responseArray && responseArray.length > 0 && responseArray[0].products) 
+                         ? responseArray[0].products 
+                         : {}; // Daca nu, folosim un obiect gol
 
-        } catch (error) {
-            console.error('Eroare la preluarea detaliilor produselor (bulk):', error);
-            // Pentru ASIN-urile care au esuat, punem date default pentru a nu bloca interfata
-            for (const asin of asinsToFetch) {
-                results[asin] = { title: 'Nume indisponibil', images: [''] };
-            }
+        // Pas 4: Procesam raspunsul si actualizam cache-ul
+        for (const asin of asinsToFetch) {
+            // Folosim datele primite sau, daca un ASIN specific lipseste, punem date default
+            const productData = bulkData[asin] || { title: 'Nume indisponibil', images: [''] };
+            sessionStorage.setItem(`product_${asin}`, JSON.stringify(productData));
+            results[asin] = productData;
+        }
+
+    } catch (error) {
+        console.error('Eroare la preluarea detaliilor produselor (bulk):', error);
+        // Daca tot request-ul esueaza, punem date default pentru a nu bloca interfata
+        for (const asin of asinsToFetch) {
+            results[asin] = { title: 'Nume indisponibil', images: [''] };
         }
     }
+    
     return results;
 }
 
-// Functia veche (fetchProductDetails) nu mai este folosita in products.js,
-// dar o lasam aici in cazul in care e necesara pe pagina de detaliu a produsului.
-// Daca vrei, o poti sterge sau adapta sa foloseasca noul format.
+// Functia fetchProductDetails ramane neschimbata
 export async function fetchProductDetails(asin) {
-    // Pur si simplu apeleaza noua functie cu un singur element
     const results = await fetchProductDetailsInBulk([asin]);
     return results[asin];
 }
-
