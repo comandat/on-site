@@ -1,6 +1,6 @@
 // scripts/data.js
 
-// Functiile getCommandsData, saveCommandsData, etc. raman neschimbate...
+// Functiile getCommandsData, saveCommandsData, etc. raman neschimbate.
 export function getCommandsData() {
     const data = localStorage.getItem('commandsData');
     return data ? JSON.parse(data) : [];
@@ -31,7 +31,7 @@ export function updateProductState(commandId, productId, newState) {
 }
 
 /**
- * NOU SI IMBUNATATIT: Preia detalii pentru mai multe produse printr-un singur request.
+ * VERSIUNE DE DEBUG: Preia detalii si afiseaza in consola raspunsul primit.
  * @param {string[]} asins - Un array de coduri ASIN.
  * @returns {Promise<Object>} Un obiect unde cheile sunt ASIN-urile si valorile sunt detaliile produselor.
  */
@@ -50,12 +50,10 @@ export async function fetchProductDetailsInBulk(asins) {
         }
     }
 
-    // Pas 2: Daca nu avem ce prelua, returnam direct ce am gasit in cache
     if (asinsToFetch.length === 0) {
         return results;
     }
 
-    // Pas 3: Daca avem ASIN-uri noi, facem un singur request pentru ele
     try {
         const response = await fetch(webhookUrl, {
             method: 'POST',
@@ -63,20 +61,25 @@ export async function fetchProductDetailsInBulk(asins) {
             body: JSON.stringify({ asins: asinsToFetch }),
         });
         if (!response.ok) {
-            throw new Error('Network response was not ok');
+            throw new Error(`Network response was not ok: ${response.statusText}`);
         }
         
-        const responseArray = await response.json();
-        
-        // --- AICI ESTE MODIFICAREA CHEIE ---
-        // Verificam daca raspunsul este un array valid si are continut
-        const bulkData = (responseArray && responseArray.length > 0 && responseArray[0].products) 
-                         ? responseArray[0].products 
-                         : {}; // Daca nu, folosim un obiect gol
+        // --- LOGARE PENTRU DEBUG ---
+        const rawText = await response.text();
+        console.log("--- Răspuns Brut de la Server (Text) ---");
+        console.log(rawText);
+        // --- SFÂRȘIT LOGARE ---
 
-        // Pas 4: Procesam raspunsul si actualizam cache-ul
+        const responseData = JSON.parse(rawText); // Parsam textul brut
+        
+        console.log("--- Răspuns de la Server (Parsat ca JSON) ---");
+        console.log(responseData);
+
+        const bulkData = (Array.isArray(responseData) && responseData.length > 0 && responseData[0].products) 
+                         ? responseData[0].products 
+                         : {};
+
         for (const asin of asinsToFetch) {
-            // Folosim datele primite sau, daca un ASIN specific lipseste, punem date default
             const productData = bulkData[asin] || { title: 'Nume indisponibil', images: [''] };
             sessionStorage.setItem(`product_${asin}`, JSON.stringify(productData));
             results[asin] = productData;
@@ -84,7 +87,6 @@ export async function fetchProductDetailsInBulk(asins) {
 
     } catch (error) {
         console.error('Eroare la preluarea detaliilor produselor (bulk):', error);
-        // Daca tot request-ul esueaza, punem date default pentru a nu bloca interfata
         for (const asin of asinsToFetch) {
             results[asin] = { title: 'Nume indisponibil', images: [''] };
         }
