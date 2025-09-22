@@ -1,14 +1,17 @@
-import { getProductById, updateProductState } from './data.js';
+// comandat/on-site/on-site-1b65a8316a69f921dd9b05878875f6e2772ab5a4/scripts/product-detail.js
+
+// Pas 1: Importam TOATE functiile necesare, inclusiv fetchProductDetails
+import { getProductById, updateProductState, fetchProductDetails } from './data.js';
 
 document.addEventListener('DOMContentLoaded', () => {
     let currentCommandId = null;
     let currentProductId = null;
     let currentProduct = null;
+    // Starea initiala a contorului de stoc din pagina de detaliu
     const detailPageState = { 'new': 0, 'very-good': 0, 'good': 0, 'broken': 0 };
     
     // --- Functii principale ---
     async function loadProductDetails() {
-        // Preluam ID-urile din sessionStorage
         currentCommandId = sessionStorage.getItem('currentCommandId');
         currentProductId = sessionStorage.getItem('currentProductId');
 
@@ -18,6 +21,7 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
         
+        // Preluam datele salvate local (stoc, cantitati)
         currentProduct = getProductById(currentCommandId, currentProductId);
         
         if (!currentProduct) {
@@ -26,31 +30,20 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
         
-        // Preluam detaliile de la webhook
-        const details = await fetchProductDetails(currentProduct.asin);
-        const productName = details.title || 'Detaliile nu au putut fi încărcate';
-        const imageUrl = details.images && details.images.length > 0 ? details.images[0] : '';
-
-
-        document.getElementById('product-detail-title').textContent = productName;
-        document.getElementById('product-detail-image').style.backgroundImage = `url('${imageUrl}')`;
+        // Preluam detaliile proaspete de la server (titlu, imagine) folosind ASIN-ul
+        const freshDetails = await fetchProductDetails(currentProduct.asin);
         
-        currentProduct = getProductById(currentCommandId, currentProductId);
-        
-        if (!currentProduct) {
-            alert("Produsul nu a fost găsit în această comandă!");
-            window.location.href = `products.html`;
-            return;
-        }
-
-        document.getElementById('product-detail-title').textContent = currentProduct.name;
-        document.getElementById('product-detail-image').style.backgroundImage = `url('${currentProduct.imageUrl}')`;
+        // Actualizam interfata cu datele corecte
+        document.getElementById('product-detail-title').textContent = freshDetails.title || 'Detaliile nu au putut fi încărcate';
+        document.getElementById('product-detail-image').style.backgroundImage = `url('${freshDetails.images?.[0] || ''}')`;
         document.getElementById('expected-stock').textContent = currentProduct.expected;
         
+        // Sincronizam starea paginii cu starea salvata a produsului
         Object.assign(detailPageState, currentProduct.state);
         updateMainUI();
     }
 
+    // Functie pentru a actualiza Sumarul de Stoc de pe pagina
     const updateMainUI = () => {
         let totalFound = Object.values(detailPageState).reduce((a, b) => a + b, 0);
         for (const condition in detailPageState) {
@@ -61,14 +54,13 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('total-found').textContent = totalFound;
     };
 
+    // Functie pentru a salva starea curenta in memoria browser-ului
     function saveCurrentProductState() {
         updateProductState(currentCommandId, currentProductId, detailPageState);
     }
     
-    // ... restul codului pentru modale si cautare ramane la fel ...
-    // Functiile de salvare vor folosi direct `currentCommandId` si `currentProductId`
+    // Aici ar veni restul codului pentru modale si butoane, care ramane neschimbat...
     
-    // --- Initial Load ---
+    // --- Initializare ---
     loadProductDetails();
 });
-
