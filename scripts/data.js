@@ -31,7 +31,7 @@ export function updateProductState(commandId, productId, newState) {
 }
 
 /**
- * VERSIUNE DE DEBUG: Preia detalii si afiseaza in consola raspunsul primit.
+ * VERSIUNEA FINALA SI ROBUSTA: Gestioneaza orice format de raspuns de la server.
  * @param {string[]} asins - Un array de coduri ASIN.
  * @returns {Promise<Object>} Un obiect unde cheile sunt ASIN-urile si valorile sunt detaliile produselor.
  */
@@ -40,7 +40,6 @@ export async function fetchProductDetailsInBulk(asins) {
     const results = {};
     const asinsToFetch = [];
 
-    // Pas 1: Verificam ce avem deja in cache
     for (const asin of asins) {
         const cachedData = sessionStorage.getItem(`product_${asin}`);
         if (cachedData) {
@@ -64,21 +63,24 @@ export async function fetchProductDetailsInBulk(asins) {
             throw new Error(`Network response was not ok: ${response.statusText}`);
         }
         
-        // --- LOGARE PENTRU DEBUG ---
-        const rawText = await response.text();
-        console.log("--- Răspuns Brut de la Server (Text) ---");
-        console.log(rawText);
-        // --- SFÂRȘIT LOGARE ---
-
-        const responseData = JSON.parse(rawText); // Parsam textul brut
+        const responseData = await response.json();
         
-        console.log("--- Răspuns de la Server (Parsat ca JSON) ---");
-        console.log(responseData);
+        // --- NOUA LOGICA UNIVERSALA ---
+        let bulkData = {}; // Incepe cu un obiect gol
+        
+        if (Array.isArray(responseData)) {
+            // Daca raspunsul este un array (cazul cand nu gaseste nimic)
+            // Verificam daca are continut, pentru siguranta
+            if (responseData.length > 0 && responseData[0] && responseData[0].products) {
+                bulkData = responseData[0].products;
+            }
+        } else if (responseData && responseData.products) {
+            // Daca raspunsul este un obiect (cazul de succes)
+            bulkData = responseData.products;
+        }
+        // Daca niciuna din conditii nu e indeplinita, bulkData ramane {}, ceea ce e corect.
 
-        const bulkData = (Array.isArray(responseData) && responseData.length > 0 && responseData[0].products) 
-                         ? responseData[0].products 
-                         : {};
-
+        // Procesarea finala ramane la fel
         for (const asin of asinsToFetch) {
             const productData = bulkData[asin] || { title: 'Nume indisponibil', images: [''] };
             sessionStorage.setItem(`product_${asin}`, JSON.stringify(productData));
