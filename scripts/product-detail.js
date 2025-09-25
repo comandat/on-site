@@ -4,25 +4,53 @@ document.addEventListener('DOMContentLoaded', () => {
     let currentCommandId = null;
     let currentProductId = null;
     let currentProduct = null;
-    let swiper = null; // Variabila pentru instanta Swiper
-    
-    // Starea initiala a contorului de stoc din pagina de detaliu
+    let swiper = null;
+
     const detailPageState = { 'new': 0, 'very-good': 0, 'good': 0, 'broken': 0 };
+    // Variabila care va tine minte starea stocului inainte de a deschide fereastra de modificare
+    let stockStateBeforeEdit = {};
+
+    // --- Functii pentru Webhook ---
+    async function sendStockUpdateToWebhook(commandId, productAsin, stockDelta) {
+        const webhookUrl = 'https://automatizare.comandat.ro/webhook/147557e0-e23d-470c-af50-ddc3c724dff8';
+        
+        const payload = {
+            commandId: commandId,
+            asin: productAsin,
+            ...stockDelta // Trimitem doar diferenta, ex: { new: 1, good: -1 }
+        };
+
+        try {
+            const response = await fetch(webhookUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
+            if (!response.ok) {
+                throw new Error(`Webhook response was not ok: ${response.statusText}`);
+            }
+            
+            console.log("Webhook update successful:", await response.json());
+            return true; // Returneaza succes
+        } catch (error) {
+            console.error('Failed to send update to webhook:', error);
+            alert('Eroare la salvarea datelor pe server. Modificările nu au fost salvate. Vă rugăm încercați din nou.');
+            return false; // Returneaza eroare
+        }
+    }
     
     // --- Functii pentru UI ---
     
     async function loadProductDetails() {
         currentCommandId = sessionStorage.getItem('currentCommandId');
         currentProductId = sessionStorage.getItem('currentProductId');
-
         if (!currentCommandId || !currentProductId) {
             alert("Lipsesc informații!");
             window.location.href = 'main.html';
             return;
         }
-        
         currentProduct = getProductById(currentCommandId, currentProductId);
-        
         if (!currentProduct) {
             alert("Produsul nu a fost găsit!");
             window.location.href = 'products.html';
@@ -30,22 +58,17 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         
         const freshDetails = await fetchProductDetails(currentProduct.asin);
-        
         document.getElementById('product-detail-title').textContent = freshDetails.title || 'Nume indisponibil';
         document.getElementById('expected-stock').textContent = currentProduct.expected;
-        
         setupImageGallery(freshDetails.images || []);
-        
         Object.assign(detailPageState, currentProduct.state);
         updateMainUI();
     }
 
     function setupImageGallery(images) {
         const wrapper = document.getElementById('product-image-wrapper');
-        wrapper.innerHTML = ''; // Golim galeria existenta
-
+        wrapper.innerHTML = '';
         if (images.length === 0) {
-            // Daca nu sunt imagini, afisam un placeholder
             wrapper.innerHTML = `<div class="swiper-slide bg-gray-200 flex items-center justify-center"><span class="material-symbols-outlined text-gray-400 text-6xl">hide_image</span></div>`;
         } else {
             images.forEach(imageUrl => {
@@ -55,17 +78,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 wrapper.appendChild(slide);
             });
         }
-        
-        // Initializam sau actualizam Swiper
         if (swiper) {
             swiper.update();
         } else {
             swiper = new Swiper('#image-swiper-container', {
                 loop: false,
-                pagination: {
-                    el: '.swiper-pagination',
-                    clickable: true,
-                },
+                pagination: { el: '.swiper-pagination', clickable: true },
             });
         }
     }
@@ -81,7 +99,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function saveCurrentProductState() {
         updateProductState(currentCommandId, currentProductId, detailPageState);
-        // La salvare, actualizam si UI-ul principal
         updateMainUI();
     }
 
@@ -93,19 +110,15 @@ document.addEventListener('DOMContentLoaded', () => {
         stockModal.innerHTML = `
             <div class="absolute bottom-0 w-full max-w-md mx-auto left-0 right-0 bg-white rounded-t-2xl shadow-lg p-4 animate-slide-down">
                 <h3 class="text-xl font-bold text-center mb-4">Adaugă în Stoc</h3>
-                
                 ${createCounter('new', 'Ca Nou')}
                 ${createCounter('very-good', 'Foarte Bun')}
                 ${createCounter('good', 'Bun')}
                 ${createCounter('broken', 'Defect', true)}
-
                 <div class="flex gap-3 mt-6">
                     <button id="close-modal-btn" class="w-1/2 rounded-lg bg-gray-200 py-3 font-bold text-gray-700">Anulează</button>
-                    <button id="save-stock-btn" class="w-1/2 rounded-lg bg-[var(--primary-color)] py-3 font-bold text-white">Salvează</button>
+                    <button id="save-and-print-btn" class="w-1/2 rounded-lg bg-[var(--primary-color)] py-3 font-bold text-white">Salvează și Printează</button>
                 </div>
             </div>`;
-        
-        // Adaugam event listeners la butoanele din modal
         addModalEventListeners();
     }
     
@@ -136,16 +149,56 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         });
 
-        document.getElementById('save-stock-btn').addEventListener('click', () => {
-            saveCurrentProductState();
-            hideModal();
+        document.getElementById('save-and-print-btn').addEventListener('click', async () => {
+            const stockStateAfterEdit = detailPageState;
+            const stockDelta = {};
+            let hasChanges = false;
+            const conditions = ['new', 'very-good', 'good', 'broken'];
+
+            for (const condition of conditions) {
+                const countBefore = stockStateBeforeEdit[condition] || 0;
+                const countAfter = stockStateAfterEdit[condition] || 0;
+                const difference = countAfter - countBefore;
+
+                if (difference !== 0) {
+                    stockDelta[condition] = difference;
+                    hasChanges = true;
+                }
+            }
+
+            if (hasChanges) {
+                const success = await sendStockUpdateToWebhook(currentCommandId, currentProduct.asin, stockDelta);
+                if (success) {
+                    // Daca serverul a confirmat, salvam si local starea NOUA, COMPLETA
+                    saveCurrentProductState();
+                    hideModal();
+                    
+                    // Aici vom adauga logica de printare doar pentru diferentele pozitive
+                    const labelsToPrint = {};
+                    for(const condition in stockDelta){
+                        if(stockDelta[condition] > 0){
+                            labelsToPrint[condition] = stockDelta[condition];
+                        }
+                    }
+                    if (Object.keys(labelsToPrint).length > 0) {
+                        console.log("TODO: Implement printing for these labels:", labelsToPrint);
+                        // triggerPrintingProcess(labelsToPrint);
+                    }
+                }
+                // Daca nu e succes, alerta este afisata in functia `sendStockUpdateToWebhook` si fereastra ramane deschisa
+            } else {
+                // Nu sunt modificari, doar inchidem fereastra
+                hideModal();
+            }
         });
 
         document.getElementById('close-modal-btn').addEventListener('click', hideModal);
     }
 
     function showModal() {
-        createStockModal(); // Recreeaza modala cu valorile curente
+        // Facem o "poză" stocului exact cand deschidem fereastra
+        stockStateBeforeEdit = { ...detailPageState };
+        createStockModal();
         stockModal.classList.remove('hidden');
     }
 
@@ -154,7 +207,6 @@ document.addEventListener('DOMContentLoaded', () => {
         if (modalContent) {
             modalContent.classList.remove('animate-slide-down');
             modalContent.classList.add('animate-slide-up');
-            // Asteptam sa se termine animatia inainte de a ascunde complet
             setTimeout(() => stockModal.classList.add('hidden'), 300);
         }
     }
@@ -162,8 +214,6 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- Initializare & Event Listeners Pagina ---
     
     document.getElementById('open-stock-modal-button').addEventListener('click', showModal);
-
-    // Linia pentru butonul de editare a fost eliminata de aici
 
     stockModal.addEventListener('click', (event) => {
         if (event.target === stockModal) {
