@@ -163,5 +163,16 @@ document.addEventListener('DOMContentLoaded', () => {
     
     document.getElementById('open-stock-modal-button').addEventListener('click', showModal);
 
+    // FIX: Adaugam event listener pentru butonul de editare (creion)
+    document.getElementById('edit-stock-button').addEventListener('click', showModal);
+
+    // FIX: Adaugam event listener pentru a inchide modala la click in exterior
+    stockModal.addEventListener('click', (event) => {
+        // Daca elementul pe care s-a dat click este fundalul (overlay-ul)
+        if (event.target === stockModal) {
+            hideModal();
+        }
+    });
+
     loadProductDetails();
 });
