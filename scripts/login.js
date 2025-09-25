@@ -98,7 +98,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 id: commandId,
                 name: `Comanda #${commandId.substring(0, 12)}`,
                 date: new Date().toLocaleDateString('ro-RO'),
-                status: 'În Desfășurare',
+                status: 'În Pregatire',
                 products: transformedProducts
             };
         });
