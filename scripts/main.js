@@ -57,6 +57,9 @@ document.addEventListener('DOMContentLoaded', () => {
         commandEl.addEventListener('click', async (event) => {
             event.preventDefault();
             
+            // FIX: Stocam URL-ul intr-o variabila inainte de await
+            const destinationUrl = event.currentTarget.href; 
+
             const loader = commandEl.querySelector('.loader-container');
             const icon = commandEl.querySelector('.icon-inventory');
             
@@ -67,9 +70,9 @@ document.addEventListener('DOMContentLoaded', () => {
             // Asteptam ca datele sa fie incarcate
             await productDataPromise;
             
-            // Stocam ID-ul si navigam
+            // Stocam ID-ul si navigam folosind variabila salvata
             sessionStorage.setItem('currentCommandId', command.id);
-            window.location.href = event.currentTarget.href;
+            window.location.href = destinationUrl;
         });
 
         container.appendChild(commandEl);
