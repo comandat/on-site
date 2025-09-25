@@ -57,8 +57,11 @@ document.addEventListener('DOMContentLoaded', () => {
         commandEl.addEventListener('click', async (event) => {
             event.preventDefault();
             
-            // FIX: Stocam URL-ul intr-o variabila inainte de await
-            const destinationUrl = event.currentTarget.href; 
+            // FIX: Salvam ID-ul si URL-ul in variabile locale INAINTE de 'await'.
+            // Folosim 'command' si 'commandEl' care sunt pastrate in memorie (closure)
+            // si sunt mai sigure decat 'event.currentTarget'.
+            const commandIdToSet = command.id;
+            const destinationUrl = commandEl.href;
 
             const loader = commandEl.querySelector('.loader-container');
             const icon = commandEl.querySelector('.icon-inventory');
@@ -70,8 +73,8 @@ document.addEventListener('DOMContentLoaded', () => {
             // Asteptam ca datele sa fie incarcate
             await productDataPromise;
             
-            // Stocam ID-ul si navigam folosind variabila salvata
-            sessionStorage.setItem('currentCommandId', command.id);
+            // Stocam ID-ul si navigam folosind variabilele salvate, care sunt garantat corecte.
+            sessionStorage.setItem('currentCommandId', commandIdToSet);
             window.location.href = destinationUrl;
         });
 
