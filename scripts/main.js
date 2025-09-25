@@ -1,5 +1,5 @@
 // scripts/main.js
-import { getCommandsData } from './data.js';
+import { getCommandsData, fetchProductDetailsInBulk } from './data.js';
 
 document.addEventListener('DOMContentLoaded', () => {
     const container = document.getElementById('commands-list-container');
@@ -7,6 +7,24 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const commands = getCommandsData();
     
+    // O promisiune care se va rezolva cand datele produselor sunt pre-incarcate
+    let productDataPromise = null;
+
+    // Functie pentru pre-incarcarea datelor
+    const preloadProductData = () => {
+        const asinsToFetch = commands
+            .filter(command => command.status === 'În Pregatire')
+            .flatMap(command => command.products.map(p => p.asin));
+        
+        if (asinsToFetch.length > 0) {
+            // Initiem fetch-ul si stocam promisiunea
+            productDataPromise = fetchProductDetailsInBulk(asinsToFetch);
+        } else {
+            // Daca nu sunt produse, cream o promisiune deja rezolvata
+            productDataPromise = Promise.resolve();
+        }
+    };
+
     if (commands.length === 0) {
         container.innerHTML = '<p class="col-span-2 text-center text-gray-500">Nu există comenzi active.</p>';
         return;
@@ -15,9 +33,9 @@ document.addEventListener('DOMContentLoaded', () => {
     container.innerHTML = ''; // Golim containerul
     commands.forEach(command => {
         const commandEl = document.createElement('a');
-        commandEl.href = 'products.html'; // URL curat
+        commandEl.href = 'products.html';
         commandEl.className = 'block rounded-lg bg-white p-4 shadow-sm transition-transform hover:scale-105 active:scale-95';
-        commandEl.dataset.commandId = command.id; // Stocam ID-ul aici temporar
+        commandEl.dataset.commandId = command.id;
         
         commandEl.innerHTML = `
             <div class="aspect-square flex flex-col justify-between">
@@ -26,20 +44,37 @@ document.addEventListener('DOMContentLoaded', () => {
                     <p class="text-sm text-gray-500">${command.status}</p>
                 </div>
                 <div class="flex items-center justify-end">
-                     <span class="material-symbols-outlined text-4xl text-gray-300">
+                     <div class="loader-container" style="display: none;">
+                        <div class="w-6 h-6 border-4 border-gray-300 border-t-[var(--primary-color)] border-solid rounded-full animate-spin"></div>
+                     </div>
+                     <span class="material-symbols-outlined text-4xl text-gray-300 icon-inventory">
                         inventory_2
                     </span>
                 </div>
             </div>
         `;
 
-        // Adaugam un event listener pentru a salva ID-ul si a naviga
-        commandEl.addEventListener('click', (event) => {
+        commandEl.addEventListener('click', async (event) => {
             event.preventDefault();
+            
+            const loader = commandEl.querySelector('.loader-container');
+            const icon = commandEl.querySelector('.icon-inventory');
+            
+            // Afisam loader-ul si ascundem icon-ul
+            loader.style.display = 'block';
+            icon.style.display = 'none';
+
+            // Asteptam ca datele sa fie incarcate
+            await productDataPromise;
+            
+            // Stocam ID-ul si navigam
             sessionStorage.setItem('currentCommandId', command.id);
             window.location.href = event.currentTarget.href;
         });
 
         container.appendChild(commandEl);
     });
+
+    // Pornim pre-incarcarea datelor dupa ce am afisat comenzile
+    preloadProductData();
 });
