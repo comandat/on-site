@@ -64,7 +64,7 @@ document.addEventListener('DOMContentLoaded', () => {
         buttonLoader.classList.remove('hidden');
 
         try {
-            // PAS 1: LOGIN (POST) - Doar autentificare
+            // PAS 1: LOGIN (POST) - Folosește text/plain (funcționează)
             const loginResponse = await fetch(loginWebhookUrl, {
                 method: 'POST',
                 headers: { 'Content-Type': 'text/plain' },
@@ -82,11 +82,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 sessionStorage.setItem('loggedInUser', loginData.user);
                 sessionStorage.setItem('lastAccessCode', accessCode); // Salvăm codul pentru Polling
                 
-                // PAS 2: DATA FETCH (POST) - Extragerea datelor
-                // FOLOSIM POST cu corpul JSON pentru a rezolva eroarea 500
+                // PAS 2: DATA FETCH (POST) - Modificat la text/plain pentru a evita CORS
                 const dataResponse = await fetch(dataFetchWebhookUrl, {
                     method: 'POST', 
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: { 'Content-Type': 'text/plain' }, // <-- MODIFICAT
                     body: JSON.stringify({ code: accessCode }), // Trimitem codul de acces în corp
                 });
 
