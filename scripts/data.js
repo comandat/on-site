@@ -66,12 +66,9 @@ export const transformData = (rawData) => {
  * Prelucrează delta-urile de stoc pendinte de pe server (GET) și le agreghează local.
  */
 export async function fetchPendingDeltas(commandId, asin) {
-    // URL-ul real al webhook-ului de citire delta (GET)
     const deltaWebhookUrl = 'https://automatizare.comandat.ro/webhook/07cb7f77-1737-4345-b840-3c610100a34b'; 
     
     try {
-        // Folosim GET, dar trimitem parametrii în URL pentru filtrare pe server, deși nodul Postgres 
-        // returnează toate datele. Vom menține logica de filtrare/agregare în frontend.
         const response = await fetch(deltaWebhookUrl, {
             method: 'GET', 
             headers: { 'Accept': 'application/json' },
@@ -86,12 +83,11 @@ export async function fetchPendingDeltas(commandId, asin) {
         const deltas = {};
         if (Array.isArray(responseData)) {
             responseData
-                .filter(item => item.command_id === commandId && item.asin === asin) // Filtrare pe comandă/produs
+                .filter(item => item.command_id === commandId && item.asin === asin) 
                 .forEach(item => {
                     const condition = item.condition;
                     const changeValue = parseInt(item.change_value, 10);
                     
-                    // Agregare locală
                     deltas[condition] = (deltas[condition] || 0) + changeValue;
                 });
         }
@@ -105,27 +101,22 @@ export async function fetchPendingDeltas(commandId, asin) {
 }
 
 /**
- * Sincronizează datele de bază (inclusiv stocul) cu serverul folosind noul webhook.
- * REVENIM LA METODA POST pentru a rezolva Eroarea 500.
+ * Sincronizează datele de bază (inclusiv stocul) cu serverul folosind noul webhook POST.
  */
 export async function fetchAndSyncAllCommandsData() {
-    // URL-ul noului webhook de extragere date
     const dataFetchWebhookUrl = 'https://automatizare.comandat.ro/webhook/5a447557-8d52-463e-8a26-5902ccee8177';
     const accessCode = sessionStorage.getItem('lastAccessCode');
     
     if (!accessCode) return false;
 
     try {
-        // NOU: Revenim la POST, trimițând codul în corpul JSON.
+        // FOLOSIM POST cu corpul JSON
         const response = await fetch(dataFetchWebhookUrl, {
-            method: 'POST', // <-- MODIFICAT: POST
+            method: 'POST', 
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ code: accessCode }), // <-- MODIFICAT: Corup JSON
+            body: JSON.stringify({ code: accessCode }), // Trimitem codul în corpul POST
         });
         
-        // Dacă serverul are nevoie de 'text/plain', schimbați 'application/json' în 'text/plain'
-        // și păstrați `body: JSON.stringify({ code: accessCode })`
-
         if (!response.ok) throw new Error(`Eroare de rețea la sincronizare: ${response.status}`);
 
         const responseData = await response.json();
@@ -145,4 +136,3 @@ export async function fetchAndSyncAllCommandsData() {
 }
 
 // ... (fetchProductDetailsInBulk și fetchProductDetails rămân neschimbate) ...
-// ... (restul codului) ...
