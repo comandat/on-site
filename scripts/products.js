@@ -7,6 +7,7 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // Helper function pentru a prelua si agrega toate delta-urile pendinte
     async function fetchAllLiveDeltas(commandId) {
+        // URL-ul de citire Delta
         const deltaWebhookUrl = 'https://automatizare.comandat.ro/webhook/07cb7f77-1737-4345-b840-3c610100a34b'; 
         const deltas = {};
         
@@ -42,8 +43,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
     async function renderProductsList() {
-        // PAS 1: Sincronizare Base State. Se actualizeaza Base State in localStorage.
-        const syncSuccess = await fetchAndSyncAllCommandsData();
+        // PAS 1 (CRITICAL CHANGE): AM ELIMINAT fetchAndSyncAllCommandsData() de aici.
+        // Ne bazăm pe Base State din localStorage.
         
         const container = document.getElementById('products-list-container');
         if (!container) return;
@@ -54,7 +55,7 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
         
-        // Reîncărcăm comanda după sincronizare
+        // Comanda este reîncărcată de aici.
         const command = getCommandById(commandId);
         if (!command || !command.products || command.products.length === 0) {
              container.innerHTML = '<p class="p-4 text-center text-gray-500">Comanda nu are produse.</p>';
@@ -119,6 +120,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // NOU: Funcția care inițiază Polling-ul și apelul inițial
     async function initPolling() {
+        // SINCRONIZARE DE BAZĂ (DOAR O DATĂ LA ÎNCĂRCAREA PAGINII)
+        await fetchAndSyncAllCommandsData();
+        
         if (refreshInterval) clearInterval(refreshInterval);
         refreshInterval = setInterval(renderProductsList, POLLING_INTERVAL);
         await renderProductsList();
