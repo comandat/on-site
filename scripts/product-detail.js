@@ -47,10 +47,7 @@ document.addEventListener('DOMContentLoaded', () => {
     async function updateLiveStockUI() {
         if (!currentCommandId || !currentProduct) return;
         
-        // PAS 1 (CRITICAL CHANGE): AM ELIMINAT fetchAndSyncAllCommandsData() de aici.
-        // Ne bazăm pe Base State din localStorage.
-
-        // PAS 2: Preluăm starea de bază din localStorage
+        // PAS 1: Preluăm starea de bază din localStorage
         const baseProduct = getProductById(currentCommandId, currentProductId);
         if (!baseProduct) return;
         const baseState = baseProduct.state;
@@ -58,29 +55,34 @@ document.addEventListener('DOMContentLoaded', () => {
         // Actualizăm Expected Stock
         document.getElementById('expected-stock').textContent = baseProduct.expected;
 
-        // PAS 3: Preluăm delta-urile pendinte de pe server
-        const deltas = await fetchPendingDeltas(currentCommandId, currentProduct.asin);
-        
-        // PAS 4: Calculăm starea 'live' (Base State + Deltas)
-        const liveState = { ...baseState };
-        let totalFound = 0;
+        // PAS 2: Preluăm delta-urile pendinte de pe server
+        try {
+            const deltas = await fetchPendingDeltas(currentCommandId, currentProduct.asin);
+            
+            // PAS 3: Calculăm starea 'live' (Base State + Deltas)
+            const liveState = { ...baseState };
+            let totalFound = 0;
 
-        for (const condition in liveState) {
-            const delta = deltas[condition] || 0;
-            // Aplicăm delta-ul peste stocul de bază
-            liveState[condition] = baseState[condition] + delta; 
-            totalFound += liveState[condition];
-        }
-        
-        // PAS 5: Actualizăm UI-ul cu liveState
-        for (const condition in liveState) {
-            document.querySelector(`[data-summary="${condition}"]`).textContent = liveState[condition];
-        }
-        document.getElementById('total-found').textContent = totalFound;
+            for (const condition in liveState) {
+                const delta = deltas[condition] || 0;
+                // Aplicăm delta-ul peste stocul de bază
+                liveState[condition] = baseState[condition] + delta; 
+                totalFound += liveState[condition];
+            }
+            
+            // PAS 4: Actualizăm UI-ul cu liveState
+            for (const condition in liveState) {
+                document.querySelector(`[data-summary="${condition}"]`).textContent = liveState[condition];
+            }
+            document.getElementById('total-found').textContent = totalFound;
 
-        // Dacă modalul NU este deschis, actualizăm și starea de bază a modalului (detailPageState)
-        if (stockModal.classList.contains('hidden')) {
-             Object.assign(detailPageState, liveState);
+            // Dacă modalul NU este deschis, actualizăm și starea de bază a modalului (detailPageState)
+            if (stockModal.classList.contains('hidden')) {
+                Object.assign(detailPageState, liveState);
+            }
+        } catch (e) {
+            // Dacă Polling-ul Delta eșuează, nu crăpăm aplicația.
+            console.warn("Polling Delta Failed, UI state not updated.", e);
         }
     };
     
@@ -109,6 +111,9 @@ document.addEventListener('DOMContentLoaded', () => {
         // SINCRONIZARE DE BAZĂ (DOAR O DATĂ LA ÎNCĂRCAREA PAGINII)
         await fetchAndSyncAllCommandsData(); 
         
+        // Reincarcam produsul dupa sync pentru a avea Base State corect (dupa Base Sync)
+        currentProduct = getProductById(currentCommandId, currentProductId);
+
         // Pornim Polling-ul: DOAR Delta la fiecare 1 minut
         if (refreshInterval) clearInterval(refreshInterval); 
         refreshInterval = setInterval(updateLiveStockUI, POLLING_INTERVAL);
@@ -214,7 +219,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     // Daca serverul a confirmat:
                     
                     // PAS CRITIC: Salvam starea NOUA (Live State) in localStorage.
-                    // Aceasta este noua stare de bază locală care se va afișa pe pagina Products.
                     saveCurrentProductState(); 
                     
                     // Fortam o actualizare UI imediata (pentru a afisa Base State NOU + Delta de pe server)
