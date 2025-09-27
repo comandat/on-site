@@ -24,8 +24,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const dataFetchWebhookUrl = 'https://automatizare.comandat.ro/webhook/5a447557-8d52-463e-8a26-5902ccee8177';
 
 
-    // ATENTIE: Functia transformData ramane aici pentru a putea fi apelata,
-    // deoarece acest script nu este de tip 'module' si nu poate folosi import din data.js.
+    // Functia transformData rămâne aici.
     const transformData = (rawData) => {
         return Object.keys(rawData).map(commandId => {
             const products = rawData[commandId] || [];
@@ -65,7 +64,7 @@ document.addEventListener('DOMContentLoaded', () => {
         buttonLoader.classList.remove('hidden');
 
         try {
-            // PAS 1: LOGIN (POST) - Doar autentificare
+            // PAS 1: LOGIN (POST) - Doar autentificare (folosește text/plain conform codului original)
             const loginResponse = await fetch(loginWebhookUrl, {
                 method: 'POST',
                 headers: { 'Content-Type': 'text/plain' },
@@ -73,7 +72,7 @@ document.addEventListener('DOMContentLoaded', () => {
             });
 
             if (!loginResponse.ok) {
-                throw new Error(`Eroare de rețea: ${loginResponse.status}`);
+                throw new Error(`Eroare de rețea la login: ${loginResponse.status}`);
             }
 
             const loginData = await loginResponse.json();
@@ -83,15 +82,16 @@ document.addEventListener('DOMContentLoaded', () => {
                 sessionStorage.setItem('loggedInUser', loginData.user);
                 sessionStorage.setItem('lastAccessCode', accessCode); // Salvăm codul pentru Polling
                 
-                // PAS 2: DATA FETCH (GET) - Extragerea datelor
-                const dataFetchUrlWithCode = `${dataFetchWebhookUrl}?code=${encodeURIComponent(accessCode)}`;
-
-                const dataResponse = await fetch(dataFetchUrlWithCode, {
-                    method: 'GET',
-                    headers: { 'Accept': 'application/json' },
+                // PAS 2: DATA FETCH (POST) - Extragerea datelor
+                // REVENIM la POST cu corpul JSON, rezolvând eroarea 500
+                const dataResponse = await fetch(dataFetchWebhookUrl, {
+                    method: 'POST', // <-- MODIFICAT: POST
+                    headers: { 'Content-Type': 'application/json' }, // <-- MODIFICAT: application/json
+                    body: JSON.stringify({ code: accessCode }), // Trimitem codul de acces
                 });
 
                 if (!dataResponse.ok) {
+                    // Aici era eroarea 500
                     throw new Error(`Eroare de rețea la data fetch: ${dataResponse.status}`);
                 }
 
