@@ -66,7 +66,6 @@ export const transformData = (rawData) => {
  * Prelucrează delta-urile de stoc pendinte de pe server (GET) și le agreghează local.
  */
 export async function fetchPendingDeltas(commandId, asin) {
-    // URL-ul real al webhook-ului de citire delta (GET)
     const deltaWebhookUrl = 'https://automatizare.comandat.ro/webhook/07cb7f77-1737-4345-b840-3c610100a34b'; 
     
     try {
@@ -75,15 +74,22 @@ export async function fetchPendingDeltas(commandId, asin) {
             headers: { 'Accept': 'application/json' },
         });
 
+        // NOU: Logăm statusul răspunsului
+        console.log(`Delta Webhook Status: ${response.status} ${response.statusText}`); 
+
         if (!response.ok) {
-            throw new Error(`Delta Webhook response was not ok: ${response.statusText}`);
+             const errorBody = await response.text();
+             console.error('Delta Webhook Error Body:', errorBody);
+             throw new Error(`Delta Webhook response was not ok: ${response.statusText || response.status}`);
         }
 
         const responseData = await response.json();
         
+        // NOU: Logăm răspunsul primit de la webhook
+        console.log('Delta Webhook Response Data:', responseData); 
+
         const deltas = {};
         if (Array.isArray(responseData)) {
-            // Filtrare pe comandă/produs și agregare locală
             responseData
                 .filter(item => item.command_id === commandId && item.asin === asin) 
                 .forEach(item => {
@@ -98,16 +104,14 @@ export async function fetchPendingDeltas(commandId, asin) {
 
     } catch (error) {
         console.error('Eroare la preluarea delta-urilor:', error);
-        return {};
+        throw error; // Aruncăm eroarea din nou pentru a fi capturată de funcția apelantă
     }
 }
 
 /**
  * Sincronizează datele de bază (inclusiv stocul) cu serverul folosind noul webhook POST.
- * Folosește text/plain pentru a evita eroarea CORS.
  */
 export async function fetchAndSyncAllCommandsData() {
-    // URL-ul noului webhook de extragere date
     const dataFetchWebhookUrl = 'https://automatizare.comandat.ro/webhook/5a447557-8d52-463e-8a26-5902ccee8177';
     const accessCode = sessionStorage.getItem('lastAccessCode');
     
