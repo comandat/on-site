@@ -1,10 +1,14 @@
 // scripts/products.js
-import { getCommandById } from './data.js';
-// Importam noua functie de bulk
-import { fetchProductDetailsInBulk } from './data.js';
+import { getCommandById, fetchProductDetailsInBulk, fetchAndSyncAllCommandsData } from './data.js';
 
 document.addEventListener('DOMContentLoaded', () => {
+    let refreshInterval = null;
+    const POLLING_INTERVAL = 60000; // 1 minut
+
     async function renderProductsList() {
+        // NOU: Sincronizăm datele de bază înainte de a le afișa (rezolvă Scenario 1)
+        const syncSuccess = await fetchAndSyncAllCommandsData();
+        
         const container = document.getElementById('products-list-container');
         if (!container) return;
 
@@ -14,14 +18,18 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
         
+        // Reîncărcăm comanda după sincronizare
         const command = getCommandById(commandId);
         if (!command || !command.products || command.products.length === 0) {
              container.innerHTML = '<p class="p-4 text-center text-gray-500">Comanda nu are produse.</p>';
             return;
         }
 
-        container.innerHTML = '<p class="p-4 text-center text-gray-500">Se încarcă produsele...</p>'; // Mesaj de asteptare
-        
+        // Dacă nu este prima randare, păstrăm mesajul de așteptare până la final
+        if (container.innerHTML === '') {
+            container.innerHTML = '<p class="p-4 text-center text-gray-500">Se încarcă produsele...</p>'; 
+        }
+
         // Pas 1: Colectam toate ASIN-urile din produsele comenzii
         const asins = command.products.map(p => p.asin);
         
@@ -40,6 +48,7 @@ document.addEventListener('DOMContentLoaded', () => {
             productEl.href = `product-detail.html`;
             productEl.className = 'flex items-center gap-4 bg-white p-4 transition-colors hover:bg-gray-50';
             
+            // product.found vine acum din localStorage, care a fost actualizat
             productEl.innerHTML = `
                 <img alt="${productName}" class="h-14 w-14 rounded-md object-cover bg-gray-200" src="${imageUrl}" />
                 <div class="flex-1">
@@ -58,5 +67,17 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    renderProductsList();
+    // NOU: Funcția care inițiază Polling-ul și apelul inițial
+    async function initPolling() {
+        if (refreshInterval) clearInterval(refreshInterval);
+        refreshInterval = setInterval(renderProductsList, POLLING_INTERVAL);
+        await renderProductsList();
+    }
+
+    initPolling();
+    
+    // NOU: Oprim Polling-ul la ieșirea din pagină
+    window.addEventListener('beforeunload', () => {
+        if (refreshInterval) clearInterval(refreshInterval);
+    });
 });
