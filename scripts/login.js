@@ -64,7 +64,7 @@ document.addEventListener('DOMContentLoaded', () => {
         buttonLoader.classList.remove('hidden');
 
         try {
-            // PAS 1: LOGIN (POST) - Doar autentificare (folosește text/plain conform codului original)
+            // PAS 1: LOGIN (POST) - Doar autentificare
             const loginResponse = await fetch(loginWebhookUrl, {
                 method: 'POST',
                 headers: { 'Content-Type': 'text/plain' },
@@ -83,15 +83,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 sessionStorage.setItem('lastAccessCode', accessCode); // Salvăm codul pentru Polling
                 
                 // PAS 2: DATA FETCH (POST) - Extragerea datelor
-                // REVENIM la POST cu corpul JSON, rezolvând eroarea 500
+                // FOLOSIM POST cu corpul JSON pentru a rezolva eroarea 500
                 const dataResponse = await fetch(dataFetchWebhookUrl, {
-                    method: 'POST', // <-- MODIFICAT: POST
-                    headers: { 'Content-Type': 'application/json' }, // <-- MODIFICAT: application/json
-                    body: JSON.stringify({ code: accessCode }), // Trimitem codul de acces
+                    method: 'POST', 
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ code: accessCode }), // Trimitem codul de acces în corp
                 });
 
                 if (!dataResponse.ok) {
-                    // Aici era eroarea 500
                     throw new Error(`Eroare de rețea la data fetch: ${dataResponse.status}`);
                 }
 
