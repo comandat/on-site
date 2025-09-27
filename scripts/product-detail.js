@@ -47,11 +47,10 @@ document.addEventListener('DOMContentLoaded', () => {
     async function updateLiveStockUI() {
         if (!currentCommandId || !currentProduct) return;
         
-        // PAS 1 (Sincronizare Base State): Se actualizeaza Base State in localStorage.
-        await fetchAndSyncAllCommandsData(); //
+        // PAS 1 (CRITICAL CHANGE): AM ELIMINAT fetchAndSyncAllCommandsData() de aici.
+        // Ne bazăm pe Base State din localStorage.
 
-        // PAS 2: Preluăm starea de bază proaspătă din localStorage
-        // Trebuie să reîncărcăm produsul după sincronizare
+        // PAS 2: Preluăm starea de bază din localStorage
         const baseProduct = getProductById(currentCommandId, currentProductId);
         if (!baseProduct) return;
         const baseState = baseProduct.state;
@@ -68,7 +67,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         for (const condition in liveState) {
             const delta = deltas[condition] || 0;
-            // Aplicăm delta-ul peste stocul de bază proaspăt
+            // Aplicăm delta-ul peste stocul de bază
             liveState[condition] = baseState[condition] + delta; 
             totalFound += liveState[condition];
         }
@@ -107,7 +106,10 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('expected-stock').textContent = currentProduct.expected; 
         setupImageGallery(freshDetails.images || []);
         
-        // Pornim Polling-ul: Sincronizare Bază + Delta la fiecare 1 minut
+        // SINCRONIZARE DE BAZĂ (DOAR O DATĂ LA ÎNCĂRCAREA PAGINII)
+        await fetchAndSyncAllCommandsData(); 
+        
+        // Pornim Polling-ul: DOAR Delta la fiecare 1 minut
         if (refreshInterval) clearInterval(refreshInterval); 
         refreshInterval = setInterval(updateLiveStockUI, POLLING_INTERVAL);
         await updateLiveStockUI(); // Apel inițial, va inițializa detailPageState
@@ -212,9 +214,10 @@ document.addEventListener('DOMContentLoaded', () => {
                     // Daca serverul a confirmat:
                     
                     // PAS CRITIC: Salvam starea NOUA (Live State) in localStorage.
+                    // Aceasta este noua stare de bază locală care se va afișa pe pagina Products.
                     saveCurrentProductState(); 
                     
-                    // Fortam o actualizare UI imediata (pentru a afisa Base State NOU + 0 Delta)
+                    // Fortam o actualizare UI imediata (pentru a afisa Base State NOU + Delta de pe server)
                     await updateLiveStockUI(); 
                     
                     hideModal();
