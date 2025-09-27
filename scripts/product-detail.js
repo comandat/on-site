@@ -10,7 +10,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Variabila care va tine minte starea stocului inainte de a deschide fereastra de modificare
     let stockStateBeforeEdit = {};
     
-    let refreshInterval = null; // NOU: Pentru a stoca referința la interval
+    let refreshInterval = null; 
     const POLLING_INTERVAL = 60000; // 1 minut
 
     // --- Functii pentru Webhook ---
@@ -47,7 +47,7 @@ document.addEventListener('DOMContentLoaded', () => {
     async function updateLiveStockUI() {
         if (!currentCommandId || !currentProduct) return;
         
-        // PAS 1 (Cheie pentru rezolvarea Scenario 1): Sincronizăm Stocul de Bază cu serverul PRINCIPAL
+        // PAS 1 (Sincronizare): Actualizează Base State din baza de date principală (localStorage)
         await fetchAndSyncAllCommandsData();
 
         // PAS 2: Preluăm starea de bază proaspătă din localStorage
@@ -55,11 +55,14 @@ document.addEventListener('DOMContentLoaded', () => {
         const baseProduct = getProductById(currentCommandId, currentProductId);
         if (!baseProduct) return;
         const baseState = baseProduct.state;
+        
+        // Actualizăm Expected Stock
+        document.getElementById('expected-stock').textContent = baseProduct.expected;
 
         // PAS 3: Preluăm delta-urile pendinte de pe server
         const deltas = await fetchPendingDeltas(currentCommandId, currentProduct.asin);
         
-        // PAS 4: Calculăm starea 'live'
+        // PAS 4: Calculăm starea 'live' (Base State + Deltas)
         const liveState = { ...baseState };
         let totalFound = 0;
 
@@ -70,7 +73,7 @@ document.addEventListener('DOMContentLoaded', () => {
             totalFound += liveState[condition];
         }
         
-        // PAS 5: Actualizăm UI-ul
+        // PAS 5: Actualizăm UI-ul cu liveState
         for (const condition in liveState) {
             document.querySelector(`[data-summary="${condition}"]`).textContent = liveState[condition];
         }
@@ -101,7 +104,7 @@ document.addEventListener('DOMContentLoaded', () => {
         
         const freshDetails = await fetchProductDetails(currentProduct.asin);
         document.getElementById('product-detail-title').textContent = freshDetails.title || 'Nume indisponibil';
-        document.getElementById('expected-stock').textContent = currentProduct.expected;
+        document.getElementById('expected-stock').textContent = currentProduct.expected; 
         setupImageGallery(freshDetails.images || []);
         
         // Pornim Polling-ul: Sincronizare Bază + Delta la fiecare 1 minut
@@ -132,20 +135,9 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         }
     }
-
-    const updateMainUI = () => {
-        let totalFound = Object.values(detailPageState).reduce((a, b) => a + b, 0);
-        for (const condition in detailPageState) {
-            const count = detailPageState[condition];
-            document.querySelector(`[data-summary="${condition}"]`).textContent = count;
-        }
-        document.getElementById('total-found').textContent = totalFound;
-    };
-
-    function saveCurrentProductState() {
-        updateProductState(currentCommandId, currentProductId, detailPageState);
-        updateMainUI();
-    }
+    
+    // Functiile updateMainUI si saveCurrentProductState sunt eliminate
+    // deoarece Polling-ul se ocupa acum de actualizarea starii.
 
     // --- Logica pentru Modala "Adauga in Stoc" ---
     
@@ -214,8 +206,10 @@ document.addEventListener('DOMContentLoaded', () => {
             if (hasChanges) {
                 const success = await sendStockUpdateToWebhook(currentCommandId, currentProduct.asin, stockDelta);
                 if (success) {
-                    // Daca serverul a confirmat, salvam si local starea NOUA, COMPLETA
-                    saveCurrentProductState();
+                    // Daca serverul a confirmat, nu mai salvam local.
+                    // Fortam o actualizare imediata de la server (Polling)
+                    await updateLiveStockUI(); 
+                    
                     hideModal();
                     
                     // Aici vom adauga logica de printare doar pentru diferentele pozitive
