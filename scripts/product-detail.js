@@ -1,4 +1,4 @@
-import { getProductById, updateProductState, fetchProductDetails } from './data.js';
+import { getProductById, updateProductState, fetchProductDetails, fetchPendingDeltas, fetchAndSyncAllCommandsData } from './data.js';
 
 document.addEventListener('DOMContentLoaded', () => {
     let currentCommandId = null;
@@ -9,6 +9,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const detailPageState = { 'new': 0, 'very-good': 0, 'good': 0, 'broken': 0 };
     // Variabila care va tine minte starea stocului inainte de a deschide fereastra de modificare
     let stockStateBeforeEdit = {};
+    
+    let refreshInterval = null; // NOU: Pentru a stoca referința la interval
+    const POLLING_INTERVAL = 60000; // 1 minut
 
     // --- Functii pentru Webhook ---
     async function sendStockUpdateToWebhook(commandId, productAsin, stockDelta) {
@@ -40,6 +43,45 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
     
+    // NOU: Funcție pentru a calcula și afișa stocul "live"
+    async function updateLiveStockUI() {
+        if (!currentCommandId || !currentProduct) return;
+        
+        // PAS 1 (Cheie pentru rezolvarea Scenario 1): Sincronizăm Stocul de Bază cu serverul PRINCIPAL
+        await fetchAndSyncAllCommandsData();
+
+        // PAS 2: Preluăm starea de bază proaspătă din localStorage
+        // Trebuie să reîncărcăm produsul după sincronizare
+        const baseProduct = getProductById(currentCommandId, currentProductId);
+        if (!baseProduct) return;
+        const baseState = baseProduct.state;
+
+        // PAS 3: Preluăm delta-urile pendinte de pe server
+        const deltas = await fetchPendingDeltas(currentCommandId, currentProduct.asin);
+        
+        // PAS 4: Calculăm starea 'live'
+        const liveState = { ...baseState };
+        let totalFound = 0;
+
+        for (const condition in liveState) {
+            const delta = deltas[condition] || 0;
+            // Aplicăm delta-ul peste stocul de bază proaspăt
+            liveState[condition] = baseState[condition] + delta; 
+            totalFound += liveState[condition];
+        }
+        
+        // PAS 5: Actualizăm UI-ul
+        for (const condition in liveState) {
+            document.querySelector(`[data-summary="${condition}"]`).textContent = liveState[condition];
+        }
+        document.getElementById('total-found').textContent = totalFound;
+
+        // Dacă modalul NU este deschis, actualizăm și starea de bază a modalului (detailPageState)
+        if (stockModal.classList.contains('hidden')) {
+             Object.assign(detailPageState, liveState);
+        }
+    };
+    
     // --- Functii pentru UI ---
     
     async function loadProductDetails() {
@@ -61,8 +103,11 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('product-detail-title').textContent = freshDetails.title || 'Nume indisponibil';
         document.getElementById('expected-stock').textContent = currentProduct.expected;
         setupImageGallery(freshDetails.images || []);
-        Object.assign(detailPageState, currentProduct.state);
-        updateMainUI();
+        
+        // Pornim Polling-ul: Sincronizare Bază + Delta la fiecare 1 minut
+        if (refreshInterval) clearInterval(refreshInterval); 
+        refreshInterval = setInterval(updateLiveStockUI, POLLING_INTERVAL);
+        await updateLiveStockUI(); // Apel inițial, va inițializa detailPageState
     }
 
     function setupImageGallery(images) {
@@ -222,4 +267,9 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     loadProductDetails();
+    
+    // NOU: Oprim Polling-ul la ieșirea din pagină
+    window.addEventListener('beforeunload', () => {
+        if (refreshInterval) clearInterval(refreshInterval);
+    });
 });
