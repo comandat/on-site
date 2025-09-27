@@ -16,19 +16,7 @@ export function getProductById(commandId, productId) {
     const command = getCommandById(commandId);
     return command ? command.products.find(p => p.id === productId) : null;
 }
-export function updateProductState(commandId, productId, newState) {
-    const allCommands = getCommandsData();
-    const commandIndex = allCommands.findIndex(c => c.id === commandId);
-    if (commandIndex > -1) {
-        const productIndex = allCommands[commandIndex].products.findIndex(p => p.id === productId);
-        if (productIndex > -1) {
-            allCommands[commandIndex].products[productIndex].state = newState;
-            const totalFound = Object.values(newState).reduce((a, b) => a + b, 0);
-            allCommands[commandIndex].products[productIndex].found = totalFound;
-        }
-    }
-    saveCommandsData(allCommands);
-}
+// FUNCTIA updateProductState A FOST ELIMINATA
 
 // NOU: Functia transformData mutata din login.js si exportata
 export const transformData = (rawData) => {
@@ -42,6 +30,7 @@ export const transformData = (rawData) => {
                 name: 'Încărcare...',
                 imageUrl: '',
                 expected: product.orderedquantity || 0,
+                // Starea initiala din baza de date (Base State)
                 found: (product.bncondition || 0) + (product.vgcondition || 0) + (product.gcondition || 0) + (product.broken || 0),
                 state: {
                     'new': product.bncondition || 0,
@@ -82,17 +71,12 @@ export async function fetchPendingDeltas(commandId, asin) {
              const errorBody = await response.text();
              console.error('Delta Webhook Error Body:', errorBody);
              
-             // TRATARE DEFENSIVĂ: Dacă statusul este 500, nu putem face JSON.parse.
-             // Dacă n8n returnează 500 la 0 rezultate, aruncăm eroarea.
              if (response.status !== 200) {
                  throw new Error(`Delta Webhook response was not ok: ${response.statusText || response.status}`);
              }
         }
         
-        // Citim răspunsul și tratăm cazul în care răspunsul este un obiect singular
         const tempResponse = await response.json();
-        
-        // CRITICAL FIX: Asigurăm că responseData este întotdeauna un array
         rawResponseData = Array.isArray(tempResponse) ? tempResponse : (tempResponse ? [tempResponse] : []);
 
         console.log('Delta Webhook Response Data (Processed):', rawResponseData); 
@@ -127,11 +111,10 @@ export async function fetchAndSyncAllCommandsData() {
     if (!accessCode) return false;
 
     try {
-        // FOLOSIM POST cu text/plain pentru a evita preflight-ul CORS
         const response = await fetch(dataFetchWebhookUrl, {
             method: 'POST', 
             headers: { 'Content-Type': 'text/plain' }, 
-            body: JSON.stringify({ code: accessCode }), // Trimitem codul în corpul POST
+            body: JSON.stringify({ code: accessCode }), 
         });
         
         if (!response.ok) throw new Error(`Eroare de rețea la sincronizare: ${response.status}`);
@@ -154,8 +137,6 @@ export async function fetchAndSyncAllCommandsData() {
 
 /**
  * VERSIUNEA FINALA SI ROBUSTA: Gestioneaza orice format de raspuns de la server.
- * @param {string[]} asins - Un array de coduri ASIN.
- * @returns {Promise<Object>} Un obiect unde cheile sunt ASIN-urile si valorile sunt detaliile produselor.
  */
 export async function fetchProductDetailsInBulk(asins) {
     const webhookUrl = 'https://automatizare.comandat.ro/webhook/f1bb3c1c-3730-4672-b989-b3e73b911043';
@@ -187,7 +168,6 @@ export async function fetchProductDetailsInBulk(asins) {
         
         const responseData = await response.json();
         
-        // --- LOGICA UNIVERSALA ---
         let bulkData = {}; 
         
         if (Array.isArray(responseData)) {
@@ -198,7 +178,6 @@ export async function fetchProductDetailsInBulk(asins) {
             bulkData = responseData.products;
         }
 
-        // Procesarea finala ramane la fel
         for (const asin of asinsToFetch) {
             const productData = bulkData[asin] || { title: 'Nume indisponibil', images: [''] };
             sessionStorage.setItem(`product_${asin}`, JSON.stringify(productData));
@@ -215,7 +194,6 @@ export async function fetchProductDetailsInBulk(asins) {
     return results;
 }
 
-// Functia fetchProductDetails ramane neschimbata
 export async function fetchProductDetails(asin) {
     const results = await fetchProductDetailsInBulk([asin]);
     return results[asin];
