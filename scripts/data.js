@@ -74,23 +74,32 @@ export async function fetchPendingDeltas(commandId, asin) {
             headers: { 'Accept': 'application/json' },
         });
 
-        // NOU: Logăm statusul răspunsului
         console.log(`Delta Webhook Status: ${response.status} ${response.statusText}`); 
-
+        
+        let rawResponseData = [];
+        
         if (!response.ok) {
              const errorBody = await response.text();
              console.error('Delta Webhook Error Body:', errorBody);
-             throw new Error(`Delta Webhook response was not ok: ${response.statusText || response.status}`);
+             
+             // TRATARE DEFENSIVĂ: Dacă statusul este 500, nu putem face JSON.parse.
+             // Dacă n8n returnează 500 la 0 rezultate, aruncăm eroarea.
+             if (response.status !== 200) {
+                 throw new Error(`Delta Webhook response was not ok: ${response.statusText || response.status}`);
+             }
         }
-
-        const responseData = await response.json();
         
-        // NOU: Logăm răspunsul primit de la webhook
-        console.log('Delta Webhook Response Data:', responseData); 
+        // Citim răspunsul și tratăm cazul în care răspunsul este un obiect singular
+        const tempResponse = await response.json();
+        
+        // CRITICAL FIX: Asigurăm că responseData este întotdeauna un array
+        rawResponseData = Array.isArray(tempResponse) ? tempResponse : (tempResponse ? [tempResponse] : []);
+
+        console.log('Delta Webhook Response Data (Processed):', rawResponseData); 
 
         const deltas = {};
-        if (Array.isArray(responseData)) {
-            responseData
+        if (Array.isArray(rawResponseData)) {
+            rawResponseData
                 .filter(item => item.command_id === commandId && item.asin === asin) 
                 .forEach(item => {
                     const condition = item.condition;
@@ -104,7 +113,7 @@ export async function fetchPendingDeltas(commandId, asin) {
 
     } catch (error) {
         console.error('Eroare la preluarea delta-urilor:', error);
-        throw error; // Aruncăm eroarea din nou pentru a fi capturată de funcția apelantă
+        throw error;
     }
 }
 
