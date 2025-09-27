@@ -1,4 +1,4 @@
-import { getProductById, updateProductState, fetchProductDetails, fetchPendingDeltas, fetchAndSyncAllCommandsData } from './data.js';
+import { getProductById, fetchProductDetails, fetchPendingDeltas, fetchAndSyncAllCommandsData } from './data.js';
 
 document.addEventListener('DOMContentLoaded', () => {
     let currentCommandId = null;
@@ -6,9 +6,10 @@ document.addEventListener('DOMContentLoaded', () => {
     let currentProduct = null;
     let swiper = null;
 
-    const detailPageState = { 'new': 0, 'very-good': 0, 'good': 0, 'broken': 0 };
-    // Variabila care va tine minte starea stocului inainte de a deschide fereastra de modificare
-    let stockStateBeforeEdit = {};
+    // Acum stocheaza starea LIVE (Base + Deltas)
+    let liveStockState = { 'new': 0, 'very-good': 0, 'good': 0, 'broken': 0 }; 
+    // Aceasta va stoca o copie a starii live la deschiderea modalului, pentru calculul diferentei.
+    let stockStateAtModalOpen = {}; 
     
     let refreshInterval = null; 
     const POLLING_INTERVAL = 60000; // 1 minut
@@ -20,7 +21,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const payload = {
             commandId: commandId,
             asin: productAsin,
-            ...stockDelta // Trimitem doar diferenta, ex: { new: 1, good: -1 }
+            ...stockDelta 
         };
 
         try {
@@ -35,11 +36,11 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             
             console.log("Webhook update successful:", await response.json());
-            return true; // Returneaza succes
+            return true; 
         } catch (error) {
             console.error('Failed to send update to webhook:', error);
             alert('Eroare la salvarea datelor pe server. Modificările nu au fost salvate. Vă rugăm încercați din nou.');
-            return false; // Returneaza eroare
+            return false; 
         }
     }
     
@@ -52,7 +53,6 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!baseProduct) return;
         const baseState = baseProduct.state;
         
-        // Actualizăm Expected Stock
         document.getElementById('expected-stock').textContent = baseProduct.expected;
 
         // PAS 2: Preluăm delta-urile pendinte de pe server
@@ -60,28 +60,26 @@ document.addEventListener('DOMContentLoaded', () => {
             const deltas = await fetchPendingDeltas(currentCommandId, currentProduct.asin);
             
             // PAS 3: Calculăm starea 'live' (Base State + Deltas)
-            const liveState = { ...baseState };
+            const calculatedLiveState = { ...baseState };
             let totalFound = 0;
 
-            for (const condition in liveState) {
+            for (const condition in calculatedLiveState) {
                 const delta = deltas[condition] || 0;
                 // Aplicăm delta-ul peste stocul de bază
-                liveState[condition] = baseState[condition] + delta; 
-                totalFound += liveState[condition];
+                calculatedLiveState[condition] = baseState[condition] + delta; 
+                totalFound += calculatedLiveState[condition];
             }
             
+            // Actualizăm starea locală live
+            Object.assign(liveStockState, calculatedLiveState);
+
             // PAS 4: Actualizăm UI-ul cu liveState
-            for (const condition in liveState) {
-                document.querySelector(`[data-summary="${condition}"]`).textContent = liveState[condition];
+            for (const condition in liveStockState) {
+                document.querySelector(`[data-summary="${condition}"]`).textContent = liveStockState[condition];
             }
             document.getElementById('total-found').textContent = totalFound;
-
-            // Dacă modalul NU este deschis, actualizăm și starea de bază a modalului (detailPageState)
-            if (stockModal.classList.contains('hidden')) {
-                Object.assign(detailPageState, liveState);
-            }
+            
         } catch (e) {
-            // Dacă Polling-ul Delta eșuează, nu crăpăm aplicația.
             console.warn("Polling Delta Failed, UI state not updated.", e);
         }
     };
@@ -96,6 +94,10 @@ document.addEventListener('DOMContentLoaded', () => {
             window.location.href = 'main.html';
             return;
         }
+        
+        // Sincronizam Base State inainte de a incarca produsul (esential)
+        await fetchAndSyncAllCommandsData(); 
+
         currentProduct = getProductById(currentCommandId, currentProductId);
         if (!currentProduct) {
             alert("Produsul nu a fost găsit!");
@@ -108,16 +110,10 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('expected-stock').textContent = currentProduct.expected; 
         setupImageGallery(freshDetails.images || []);
         
-        // SINCRONIZARE DE BAZĂ (DOAR O DATĂ LA ÎNCĂRCAREA PAGINII)
-        await fetchAndSyncAllCommandsData(); 
-        
-        // Reincarcam produsul dupa sync pentru a avea Base State corect (dupa Base Sync)
-        currentProduct = getProductById(currentCommandId, currentProductId);
-
-        // Pornim Polling-ul: DOAR Delta la fiecare 1 minut
+        // Pornim Polling-ul
         if (refreshInterval) clearInterval(refreshInterval); 
         refreshInterval = setInterval(updateLiveStockUI, POLLING_INTERVAL);
-        await updateLiveStockUI(); // Apel inițial, va inițializa detailPageState
+        await updateLiveStockUI(); // Apel inițial
     }
 
     function setupImageGallery(images) {
@@ -136,6 +132,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (swiper) {
             swiper.update();
         } else {
+            // Se presupune că Swiper este încărcat în product-detail.html
             swiper = new Swiper('#image-swiper-container', {
                 loop: false,
                 pagination: { el: '.swiper-pagination', clickable: true },
@@ -143,67 +140,70 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // REINTRODUS: Functia care salveaza starea locala
-    function saveCurrentProductState() {
-        // Salveaza starea curenta (care include si delta adaugata in modal) in localStorage
-        updateProductState(currentCommandId, currentProductId, detailPageState); 
-    }
 
     // --- Logica pentru Modala "Adauga in Stoc" ---
     
     const stockModal = document.getElementById('stock-modal');
     
-    function createStockModal() {
+    // Functia care populeaza modalul cu starea live curenta
+    function createStockModal(currentState) {
+        // Cream o copie a starii curente in care vom face modificarile
+        const modalState = { ...currentState };
+        
         stockModal.innerHTML = `
             <div class="absolute bottom-0 w-full max-w-md mx-auto left-0 right-0 bg-white rounded-t-2xl shadow-lg p-4 animate-slide-down">
                 <h3 class="text-xl font-bold text-center mb-4">Adaugă în Stoc</h3>
-                ${createCounter('new', 'Ca Nou')}
-                ${createCounter('very-good', 'Foarte Bun')}
-                ${createCounter('good', 'Bun')}
-                ${createCounter('broken', 'Defect', true)}
+                ${createCounter('new', 'Ca Nou', modalState)}
+                ${createCounter('very-good', 'Foarte Bun', modalState)}
+                ${createCounter('good', 'Bun', modalState)}
+                ${createCounter('broken', 'Defect', modalState, true)}
                 <div class="flex gap-3 mt-6">
                     <button id="close-modal-btn" class="w-1/2 rounded-lg bg-gray-200 py-3 font-bold text-gray-700">Anulează</button>
                     <button id="save-and-print-btn" class="w-1/2 rounded-lg bg-[var(--primary-color)] py-3 font-bold text-white">Salvează și Printează</button>
                 </div>
             </div>`;
-        addModalEventListeners();
+        addModalEventListeners(modalState);
+        return modalState; 
     }
     
-    function createCounter(id, label, isDanger = false) {
+    // Modificam createCounter sa primeasca starea
+    function createCounter(id, label, state, isDanger = false) {
         const colorClass = isDanger ? 'text-red-600' : 'text-gray-800';
         return `
             <div class="flex items-center justify-between py-3 border-b">
                 <span class="text-lg font-medium ${colorClass}">${label}</span>
                 <div class="flex items-center gap-3">
                     <button data-action="minus" data-target="${id}" class="control-btn rounded-full bg-gray-200 w-8 h-8 flex items-center justify-center text-lg font-bold">-</button>
-                    <span id="count-${id}" class="text-xl font-bold w-8 text-center">${detailPageState[id]}</span>
+                    <span id="count-${id}" class="text-xl font-bold w-8 text-center">${state[id]}</span>
                     <button data-action="plus" data-target="${id}" class="control-btn rounded-full bg-gray-200 w-8 h-8 flex items-center justify-center text-lg font-bold">+</button>
                 </div>
             </div>`;
     }
 
-    function addModalEventListeners() {
+    // Modificam addModalEventListeners sa primeasca starea modalului
+    function addModalEventListeners(modalState) {
         document.querySelectorAll('.control-btn').forEach(button => {
             button.addEventListener('click', () => {
                 const action = button.dataset.action;
                 const target = button.dataset.target;
                 if (action === 'plus') {
-                    detailPageState[target]++;
-                } else if (action === 'minus' && detailPageState[target] > 0) {
-                    detailPageState[target]--;
+                    modalState[target]++;
+                } else if (action === 'minus' && modalState[target] > 0) {
+                    modalState[target]--;
                 }
-                document.getElementById(`count-${target}`).textContent = detailPageState[target];
+                document.getElementById(`count-${target}`).textContent = modalState[target];
             });
         });
 
         document.getElementById('save-and-print-btn').addEventListener('click', async () => {
-            const stockStateAfterEdit = detailPageState;
+            const stockStateAfterEdit = modalState; 
             const stockDelta = {};
             let hasChanges = false;
             const conditions = ['new', 'very-good', 'good', 'broken'];
 
+            // Calculam Delta: (Starea Noua din Modal) - (Starea Live de la deschiderea Modalului)
             for (const condition of conditions) {
-                const countBefore = stockStateBeforeEdit[condition] || 0;
+                const countBefore = stockStateAtModalOpen[condition] || 0;
                 const countAfter = stockStateAfterEdit[condition] || 0;
                 const difference = countAfter - countBefore;
 
@@ -214,31 +214,27 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             if (hasChanges) {
+                // Trimitem delta la server
                 const success = await sendStockUpdateToWebhook(currentCommandId, currentProduct.asin, stockDelta);
+                
                 if (success) {
-                    // Daca serverul a confirmat:
-                    
-                    // PAS CRITIC: Salvam starea NOUA (Live State) in localStorage.
-                    saveCurrentProductState(); 
-                    
-                    // Fortam o actualizare UI imediata (pentru a afisa Base State NOU + Delta de pe server)
+                    // Daca serverul a confirmat, inchidem modalul si Fortam un Polling Delta imediat
+                    hideModal();
                     await updateLiveStockUI(); 
                     
-                    hideModal();
-                    
-                    // Aici vom adauga logica de printare doar pentru diferentele pozitive
+                    // Aici vom adauga logica de printare
                     const labelsToPrint = {};
                     for(const condition in stockDelta){
                         if(stockDelta[condition] > 0){
-                            labelsToPrint[condition] = stockDelta[condition];
+                            // Numarul de etichete de printat este egal cu diferenta pozitiva
+                            labelsToPrint[condition] = stockDelta[condition]; 
                         }
                     }
                     if (Object.keys(labelsToPrint).length > 0) {
-                        console.log("TODO: Implement printing for these labels:", labelsToPrint);
-                        // triggerPrintingProcess(labelsToPrint);
+                        triggerPrintingProcess(labelsToPrint);
                     }
                 }
-                // Daca nu e succes, alerta este afisata in functia `sendStockUpdateToWebhook` si fereastra ramane deschisa
+                // Daca nu e succes, alerta este afisata si fereastra ramane deschisa
             } else {
                 // Nu sunt modificari, doar inchidem fereastra
                 hideModal();
@@ -247,16 +243,27 @@ document.addEventListener('DOMContentLoaded', () => {
 
         document.getElementById('close-modal-btn').addEventListener('click', hideModal);
     }
-
+    
+    // Functie noua de printare (folosind logica existenta in printer-redirect.js)
+    function triggerPrintingProcess(labelsToPrint) {
+        const productCode = currentProduct.id;
+        // Trimit toate detaliile de printat ca JSON in URL
+        const printDetails = JSON.stringify({ code: productCode, quantities: labelsToPrint });
+        
+        // Deschide pagina printer.html și trimite detaliile ca parametru URL
+        window.open(`printer.html?print=${encodeURIComponent(printDetails)}`, '_blank');
+    }
+    
     function showModal() {
-        // Facem o "poză" stocului exact cand deschidem fereastra
-        stockStateBeforeEdit = { ...detailPageState };
-        createStockModal();
+        // Facem o "poză" stocului LIVE exact cand deschidem fereastra
+        stockStateAtModalOpen = { ...liveStockState };
+        // Creaza modalul cu starea LIVE si seteaza event listenerii pentru a modifica starea temporara
+        createStockModal(stockStateAtModalOpen); 
         stockModal.classList.remove('hidden');
     }
 
     function hideModal() {
-        const modalContent = stockModal.querySelector('.animate-slide-down');
+        const modalContent = stockModal.querySelector('div.animate-slide-down, div.animate-slide-up');
         if (modalContent) {
             modalContent.classList.remove('animate-slide-down');
             modalContent.classList.add('animate-slide-up');
@@ -276,7 +283,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     loadProductDetails();
     
-    // NOU: Oprim Polling-ul la ieșirea din pagină
     window.addEventListener('beforeunload', () => {
         if (refreshInterval) clearInterval(refreshInterval);
     });
