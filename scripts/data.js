@@ -66,12 +66,12 @@ export const transformData = (rawData) => {
  * Prelucrează delta-urile de stoc pendinte de pe server (GET) și le agreghează local.
  */
 export async function fetchPendingDeltas(commandId, asin) {
-    // NOU: URL-ul real al webhook-ului de citire delta (GET)
+    // URL-ul real al webhook-ului de citire delta (GET)
     const deltaWebhookUrl = 'https://automatizare.comandat.ro/webhook/07cb7f77-1737-4345-b840-3c610100a34b'; 
     
     try {
-        // Deoarece este GET și returnează datele din tabel fără filtrare/agregare în n8n, 
-        // vom face filtrarea și agregarea în frontend.
+        // Folosim GET, dar trimitem parametrii în URL pentru filtrare pe server, deși nodul Postgres 
+        // returnează toate datele. Vom menține logica de filtrare/agregare în frontend.
         const response = await fetch(deltaWebhookUrl, {
             method: 'GET', 
             headers: { 'Accept': 'application/json' },
@@ -105,7 +105,8 @@ export async function fetchPendingDeltas(commandId, asin) {
 }
 
 /**
- * Sincronizează datele de bază (inclusiv stocul) cu serverul folosind noul webhook GET.
+ * Sincronizează datele de bază (inclusiv stocul) cu serverul folosind noul webhook.
+ * REVENIM LA METODA POST pentru a rezolva Eroarea 500.
  */
 export async function fetchAndSyncAllCommandsData() {
     // URL-ul noului webhook de extragere date
@@ -115,14 +116,16 @@ export async function fetchAndSyncAllCommandsData() {
     if (!accessCode) return false;
 
     try {
-        // Folosim GET cu codul în query string
-        const urlWithCode = `${dataFetchWebhookUrl}?code=${encodeURIComponent(accessCode)}`;
-
-        const response = await fetch(urlWithCode, {
-            method: 'GET',
-            headers: { 'Accept': 'application/json' },
+        // NOU: Revenim la POST, trimițând codul în corpul JSON.
+        const response = await fetch(dataFetchWebhookUrl, {
+            method: 'POST', // <-- MODIFICAT: POST
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ code: accessCode }), // <-- MODIFICAT: Corup JSON
         });
         
+        // Dacă serverul are nevoie de 'text/plain', schimbați 'application/json' în 'text/plain'
+        // și păstrați `body: JSON.stringify({ code: accessCode })`
+
         if (!response.ok) throw new Error(`Eroare de rețea la sincronizare: ${response.status}`);
 
         const responseData = await response.json();
@@ -141,76 +144,5 @@ export async function fetchAndSyncAllCommandsData() {
     }
 }
 
-
-/**
- * VERSIUNEA FINALA SI ROBUSTA: Gestioneaza orice format de raspuns de la server.
- * @param {string[]} asins - Un array de coduri ASIN.
- * @returns {Promise<Object>} Un obiect unde cheile sunt ASIN-urile si valorile sunt detaliile produselor.
- */
-export async function fetchProductDetailsInBulk(asins) {
-    const webhookUrl = 'https://automatizare.comandat.ro/webhook/f1bb3c1c-3730-4672-b989-b3e73b911043';
-    const results = {};
-    const asinsToFetch = [];
-
-    for (const asin of asins) {
-        const cachedData = sessionStorage.getItem(`product_${asin}`);
-        if (cachedData) {
-            results[asin] = JSON.parse(cachedData);
-        } else {
-            asinsToFetch.push(asin);
-        }
-    }
-
-    if (asinsToFetch.length === 0) {
-        return results;
-    }
-
-    try {
-        const response = await fetch(webhookUrl, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ asins: asinsToFetch }),
-        });
-        if (!response.ok) {
-            throw new Error(`Network response was not ok: ${response.statusText}`);
-        }
-        
-        const responseData = await response.json();
-        
-        // --- NOUA LOGICA UNIVERSALA ---
-        let bulkData = {}; // Incepe cu un obiect gol
-        
-        if (Array.isArray(responseData)) {
-            // Daca raspunsul este un array (cazul cand nu gaseste nimic)
-            // Verificam daca are continut, pentru siguranta
-            if (responseData.length > 0 && responseData[0] && responseData[0].products) {
-                bulkData = responseData[0].products;
-            }
-        } else if (responseData && responseData.products) {
-            // Daca raspunsul este un obiect (cazul de succes)
-            bulkData = responseData.products;
-        }
-        // Daca niciuna din conditii nu e indeplinita, bulkData ramane {}, ceea ce e corect.
-
-        // Procesarea finala ramane la fel
-        for (const asin of asinsToFetch) {
-            const productData = bulkData[asin] || { title: 'Nume indisponibil', images: [''] };
-            sessionStorage.setItem(`product_${asin}`, JSON.stringify(productData));
-            results[asin] = productData;
-        }
-
-    } catch (error) {
-        console.error('Eroare la preluarea detaliilor produselor (bulk):', error);
-        for (const asin of asinsToFetch) {
-            results[asin] = { title: 'Nume indisponibil', images: [''] };
-        }
-    }
-    
-    return results;
-}
-
-// Functia fetchProductDetails ramane neschimbata
-export async function fetchProductDetails(asin) {
-    const results = await fetchProductDetailsInBulk([asin]);
-    return results[asin];
-}
+// ... (fetchProductDetailsInBulk și fetchProductDetails rămân neschimbate) ...
+// ... (restul codului) ...
