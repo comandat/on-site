@@ -47,8 +47,8 @@ document.addEventListener('DOMContentLoaded', () => {
     async function updateLiveStockUI() {
         if (!currentCommandId || !currentProduct) return;
         
-        // PAS 1 (Sincronizare): Actualizează Base State din baza de date principală (localStorage)
-        await fetchAndSyncAllCommandsData();
+        // PAS 1 (Sincronizare Base State): Se actualizeaza Base State in localStorage.
+        await fetchAndSyncAllCommandsData(); //
 
         // PAS 2: Preluăm starea de bază proaspătă din localStorage
         // Trebuie să reîncărcăm produsul după sincronizare
@@ -135,9 +135,12 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         }
     }
-    
-    // Functiile updateMainUI si saveCurrentProductState sunt eliminate
-    // deoarece Polling-ul se ocupa acum de actualizarea starii.
+
+    // REINTRODUS: Functia care salveaza starea locala
+    function saveCurrentProductState() {
+        // Salveaza starea curenta (care include si delta adaugata in modal) in localStorage
+        updateProductState(currentCommandId, currentProductId, detailPageState); 
+    }
 
     // --- Logica pentru Modala "Adauga in Stoc" ---
     
@@ -206,8 +209,12 @@ document.addEventListener('DOMContentLoaded', () => {
             if (hasChanges) {
                 const success = await sendStockUpdateToWebhook(currentCommandId, currentProduct.asin, stockDelta);
                 if (success) {
-                    // Daca serverul a confirmat, nu mai salvam local.
-                    // Fortam o actualizare imediata de la server (Polling)
+                    // Daca serverul a confirmat:
+                    
+                    // PAS CRITIC: Salvam starea NOUA (Live State) in localStorage.
+                    saveCurrentProductState(); 
+                    
+                    // Fortam o actualizare UI imediata (pentru a afisa Base State NOU + 0 Delta)
                     await updateLiveStockUI(); 
                     
                     hideModal();
