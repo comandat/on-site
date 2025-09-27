@@ -8,6 +8,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet"/>
     <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
     <link rel="stylesheet" href="style.css">
+    <script src="https://unpkg.com/qrcode-generator@1.0.1/qrcode.js"></script> 
     <script src="scripts/auth.js"></script>
     <style>
         .dot { height: 10px; width: 10px; border-radius: 50%; display: inline-block; }
@@ -32,10 +33,14 @@
                     <h2 id="status" class="text-gray-500 mt-2">Apasă pentru a te conecta</h2>
                 </div>
 
-                <div class="mt-6">
+                <div class="mt-6 space-y-3">
                     <button id="connect-btn" class="w-full flex items-center justify-center gap-2 rounded-lg bg-blue-600 py-3 text-base font-bold text-white shadow-md hover:bg-blue-700">
                         <span class="material-symbols-outlined">bluetooth_searching</span>
                         Caută Imprimantă
+                    </button>
+                    <button id="print-btn" disabled class="w-full flex items-center justify-center gap-2 rounded-lg bg-gray-300 py-3 text-base font-bold text-white shadow-md cursor-not-allowed">
+                        <span class="material-symbols-outlined">label_print</span>
+                        Imprimă Etichetele
                     </button>
                     <div class="mt-2 flex items-center justify-center gap-2">
                         <span id="connection-dot" class="dot bg-gray-400"></span>
