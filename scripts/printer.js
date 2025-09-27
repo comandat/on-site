@@ -1,17 +1,16 @@
 // Așteaptă ca întregul document HTML să fie încărcat înainte de a rula scriptul
 document.addEventListener('DOMContentLoaded', () => {
     
-    // --- CODUL TĂU ÎNCEPE AICI ---
-
     const connectBtn = document.getElementById('connect-btn');
     const printBtn = document.getElementById('print-btn');
-    const textInput = document.getElementById('print-text-input');
+    // Am eliminat textInput, deoarece datele vin din URL/JS
     const statusP = document.getElementById('status');
     const connectionDot = document.getElementById('connection-dot');
     const connectionText = document.getElementById('connection-text');
 
     let niimbotCharacteristic = null;
     let responseResolver = null;
+    let printQueue = [];
 
     function createNiimbotPacket(type, data) {
         const dataBytes = Array.isArray(data) ? data : [data];
@@ -101,18 +100,16 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    async function printLabel(textToPrint) {
+    // Functia de printare a unei singure etichete (accepta cod si eticheta)
+    async function printSingleLabel(productCode, conditionLabel) {
         if (!niimbotCharacteristic) {
-            alert("Imprimanta nu este conectată.");
-            return;
+            throw new Error("Imprimanta nu este conectată.");
         }
-        if (!textToPrint) {
-            alert("Introduceți un text pentru a imprima.");
-            return;
-        }
+        
+        const textToPrint = `${productCode} (${conditionLabel})`;
 
         try {
-            statusP.textContent = 'Se pregătește eticheta...';
+            statusP.textContent = `Se pregătește eticheta: ${textToPrint}...`;
 
             const labelWidth = 240;
             const labelHeight = 120;
@@ -133,8 +130,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
             const verticalOffset = 10; 
 
+            // Presupunem ca qrcode function este disponibila global
             const qr = qrcode(0, 'M');
-            qr.addData(textToPrint);
+            qr.addData(productCode); // Doar codul in QR
             qr.make();
             const qrImg = new Image();
             qrImg.src = qr.createDataURL(6, 2);
@@ -151,15 +149,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
             const textX = -labelWidth / 2 + qrSize + 30;
             
-            if (textToPrint.length > 7) {
-                const mid = Math.ceil(textToPrint.length / 2);
-                const text1 = textToPrint.substring(0, mid);
-                const text2 = textToPrint.substring(mid);
-                ctx.fillText(text1, textX, 0 - 18 + verticalOffset);
-                ctx.fillText(text2, textX, 0 + 18 + verticalOffset);
-            } else {
-                ctx.fillText(textToPrint, textX, 0 + verticalOffset);
-            }
+            // Textul afisat va fi 'CODE\n(CONDITION)'
+            const textLines = [productCode, `(${conditionLabel})`];
+
+            ctx.fillText(textLines[0], textX, 0 - 18 + verticalOffset);
+            ctx.fillText(textLines[1], textX, 0 + 18 + verticalOffset);
 
             ctx.restore();
             
@@ -204,26 +198,72 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             await sendCommandAndWait(niimbotCharacteristic, createNiimbotPacket(0xE3, [1]));
-            await sendCommandAndWait(niimbotCharacteristic, createNiimbotPacket(0xF3, [1]));
+            await sendCommandAndWait(niimbotCharacteristic, createNiimbotPacket(0xF3, [1])); 
 
-            statusP.textContent = 'Comandă trimisă cu succes!';
+            statusP.textContent = `Eticheta "${textToPrint}" a fost trimisă.`;
         } catch (error) {
-            statusP.textContent = `Eroare la imprimare: ${error.message}`;
+            statusP.textContent = `Eroare la imprimarea etichetei: ${textToPrint} - ${error.message}`;
+            throw error;
         }
+    }
+
+    async function printAllLabels(queue) {
+        if (!queue || queue.length === 0) {
+            statusP.textContent = 'Nu sunt etichete de imprimat.';
+            return;
+        }
+        
+        statusP.textContent = `Se inițiază imprimarea pentru ${queue.length} etichete...`;
+        
+        for (let i = 0; i < queue.length; i++) {
+            const { code, conditionLabel } = queue[i];
+            try {
+                await printSingleLabel(code, conditionLabel);
+                await new Promise(res => setTimeout(res, 500)); 
+            } catch (e) {
+                console.error("Eroare la imprimarea etichetei:", e);
+                return;
+            }
+        }
+        statusP.textContent = `S-a finalizat imprimarea celor ${queue.length} etichete.`;
     }
 
     // Adaugă event listenere la butoane
     connectBtn.addEventListener('click', connectToPrinter);
+    
     printBtn.addEventListener('click', () => {
-        const text = textInput.value;
-        printLabel(text);
+        if (printQueue.length > 0) {
+            printAllLabels(printQueue);
+        } else {
+             alert("Nu sunt etichete de imprimat. Sincronizați datele de la produs.");
+        }
     });
 
-    // Verifică dacă există text în URL la încărcarea paginii
+    // Verifică dacă există date de printat în URL la încărcarea paginii
     const urlParams = new URLSearchParams(window.location.search);
-    const textToPrint = urlParams.get('text');
-    if (textToPrint) {
-        textInput.value = textToPrint;
+    const printDetails = urlParams.get('print'); // Noul parametru
+    
+    if (printDetails) {
+        try {
+            const data = JSON.parse(decodeURIComponent(printDetails));
+            const { code, quantities } = data;
+            const tempQueue = [];
+            
+            // Construim coada de printare, repetând eticheta de 'count' ori
+            for (const condition in quantities) {
+                const count = quantities[condition];
+                for (let i = 0; i < count; i++) {
+                    tempQueue.push({ code: code, conditionLabel: condition });
+                }
+            }
+            printQueue = tempQueue;
+            statusP.textContent = `Gata de imprimare: ${printQueue.length} etichete`;
+        } catch (e) {
+            statusP.textContent = 'Eroare: Date de imprimare invalide in URL.';
+            console.error(e);
+        }
+    } else {
+        statusP.textContent = 'Nu au fost specificate date de imprimare.';
     }
 
-}); // --- SFÂRȘITUL BLOCULUI DOMContentLoaded ---
+});
