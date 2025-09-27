@@ -110,10 +110,10 @@ export async function fetchAndSyncAllCommandsData() {
     if (!accessCode) return false;
 
     try {
-        // FOLOSIM POST cu corpul JSON
+        // FOLOSIM POST cu text/plain pentru a evita preflight-ul CORS
         const response = await fetch(dataFetchWebhookUrl, {
             method: 'POST', 
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'text/plain' }, // <-- MODIFICAT
             body: JSON.stringify({ code: accessCode }), // Trimitem codul în corpul POST
         });
         
