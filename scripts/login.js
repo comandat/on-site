@@ -26,7 +26,7 @@ document.addEventListener('DOMContentLoaded', () => {
             // PAS 1: Validare cod de acces
             const loginResponse = await fetch(loginWebhookUrl, {
                 method: 'POST',
-                headers: { { 'Content-Type': 'text/plain' } },
+                headers: { 'Content-Type': 'text/plain' },
                 body: JSON.stringify({ code: accessCode }),
             });
 
@@ -80,3 +80,4 @@ document.addEventListener('DOMContentLoaded', () => {
     // Adaugă import-ul necesar în index.html
     // Asigură-te că tag-ul script pentru login.js are type="module"
 });
+
