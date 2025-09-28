@@ -7,7 +7,9 @@ document.addEventListener('DOMContentLoaded', () => {
     let currentProduct = null;
     let swiper = null;
 
-    // Stocăm starea din modal separat pentru a calcula diferența la salvare
+    // Aici vom stoca o "fotografie" a stării exact la deschiderea ferestrei
+    let stockStateAtModalOpen = {};
+    // Starea pe care o modifici în fereastră
     let stockStateInModal = {};
 
     const pageElements = {
@@ -19,16 +21,12 @@ document.addEventListener('DOMContentLoaded', () => {
         openModalButton: document.getElementById('open-stock-modal-button')
     };
 
-    /**
-     * Afișează detaliile produsului (nume, imagini). Rulează o singură dată.
-     */
     async function renderProductShell() {
         const details = await fetchProductDetailsInBulk([currentProduct.asin]);
         const productDetails = details[currentProduct.asin];
 
         pageElements.title.textContent = productDetails.title || 'Nume indisponibil';
         
-        // Setup Swiper/Gallery
         const images = productDetails.images || [];
         pageElements.imageWrapper.innerHTML = '';
         if (images.length === 0) {
@@ -45,16 +43,11 @@ document.addEventListener('DOMContentLoaded', () => {
         else swiper = new Swiper('#image-swiper-container', { pagination: { el: '.swiper-pagination' } });
     }
 
-    /**
-     * Afișează stocurile. Poate fi chemată de mai multe ori pentru a reîmprospăta UI-ul.
-     */
     function renderStockLevels() {
-        // Preluăm cea mai recentă versiune a produsului din starea centralizată
         currentProduct = AppState.getProductById(currentCommandId, currentProductId);
-        if (!currentProduct) return; // Produsul a fost cumva eliminat
+        if (!currentProduct) return;
 
         pageElements.expectedStock.textContent = currentProduct.expected;
-
         let totalFound = 0;
         for (const condition in currentProduct.state) {
             const count = currentProduct.state[condition];
@@ -64,18 +57,15 @@ document.addEventListener('DOMContentLoaded', () => {
         pageElements.totalFound.textContent = totalFound;
     }
 
-    /**
-     * Logica pentru salvarea modificărilor din modal.
-     */
     async function handleSaveChanges() {
-        const originalState = currentProduct.state;
+        // Logica de calcul a fost refăcută aici
         const newState = stockStateInModal;
         const delta = {};
         let hasChanges = false;
 
-        // 1. Calculăm delta (diferența)
-        for (const condition in originalState) {
-            const difference = newState[condition] - originalState[condition];
+        // 1. Calculăm delta (diferența) comparând cu starea de la deschiderea ferestrei
+        for (const condition in stockStateAtModalOpen) {
+            const difference = newState[condition] - stockStateAtModalOpen[condition];
             if (difference !== 0) {
                 delta[condition] = difference;
                 hasChanges = true;
@@ -87,28 +77,36 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        // 2. Actualizare optimistă a UI-ului
-        AppState.updateProductState(currentCommandId, currentProductId, newState);
-        renderStockLevels(); // Re-afișează stocurile instantaneu
+        // 2. Calculăm starea finală corectă pentru actualizarea optimistă
+        const finalState = { ...currentProduct.state };
+        for(const condition in delta){
+            finalState[condition] = (finalState[condition] || 0) + delta[condition];
+        }
+
+        // 3. Actualizare optimistă a UI-ului
+        AppState.updateProductState(currentCommandId, currentProductId, finalState);
+        renderStockLevels();
         hideModal();
 
-        // 3. Trimite la server în fundal
+        // 4. Trimite la server în fundal
         const success = await sendStockUpdate(currentCommandId, currentProduct.asin, delta);
 
-        // 4. Dacă serverul a eșuat, anulăm modificarea și notificăm utilizatorul
         if (!success) {
-            alert('Eroare de server! Modificarea a fost anulată. Vă rugăm încercați din nou.');
-            // Anulează modificarea (revert)
-            AppState.updateProductState(currentCommandId, currentProductId, originalState);
-            renderStockLevels(); // Re-afișează starea corectă
+            alert('Eroare de server! Modificarea a fost anulată. Se reîncarcă starea corectă.');
+            // Dacă serverul eșuează, forțăm o resincronizare completă pentru a preveni coruperea datelor
+            await syncStateWithServer();
+            renderStockLevels();
         }
     }
 
     // --- Logica pentru Modala de Stoc ---
 
     function showModal() {
-        // Creăm o copie a stării curente pentru a o putea modifica în siguranță
+        // Facem o "poză" stocului LIVE exact când deschidem fereastra
+        stockStateAtModalOpen = { ...currentProduct.state };
+        // Creăm o copie separată pentru a o modifica
         stockStateInModal = { ...currentProduct.state };
+
         pageElements.stockModal.innerHTML = `
             <div class="absolute bottom-0 w-full max-w-md mx-auto left-0 right-0 bg-white rounded-t-2xl shadow-lg p-4 animate-slide-down">
                 <h3 class="text-xl font-bold text-center mb-4">Adaugă / Modifică Stoc</h3>
@@ -163,9 +161,6 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('close-modal-btn').addEventListener('click', hideModal);
     }
     
-    /**
-     * Funcția de inițializare a paginii
-     */
     async function initializePage() {
         currentCommandId = sessionStorage.getItem('currentCommandId');
         currentProductId = sessionStorage.getItem('currentProductId');
@@ -175,13 +170,11 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        // Sincronizăm datele cu serverul LA FIECARE INTRARE PE PAGINĂ
-        // pentru a fi siguri că avem cea mai nouă stare.
         await syncStateWithServer();
 
         currentProduct = AppState.getProductById(currentCommandId, currentProductId);
         if (!currentProduct) {
-            alert("Eroare: Produsul nu a fost găsit în starea curentă a aplicației.");
+            alert("Eroare: Produsul nu a fost găsit.");
             window.location.href = 'products.html';
             return;
         }
@@ -189,7 +182,6 @@ document.addEventListener('DOMContentLoaded', () => {
         renderStockLevels();
         renderProductShell();
 
-        // Adaugă event listenere la elementele principale
         pageElements.openModalButton.addEventListener('click', showModal);
         pageElements.stockModal.addEventListener('click', (e) => e.target === pageElements.stockModal && hideModal());
     }
