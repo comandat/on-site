@@ -44,6 +44,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function renderStockLevels() {
+        // Se asigură că avem mereu cea mai proaspătă versiune a produsului din starea centrală
         currentProduct = AppState.getProductById(currentCommandId, currentProductId);
         if (!currentProduct) return;
 
@@ -58,14 +59,12 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     async function handleSaveChanges() {
-        // Logica de calcul a fost refăcută aici
-        const newState = stockStateInModal;
         const delta = {};
         let hasChanges = false;
 
-        // 1. Calculăm delta (diferența) comparând cu starea de la deschiderea ferestrei
+        // Pasul 1: Calculează diferența (delta) corect, comparând cu starea de la deschiderea ferestrei.
         for (const condition in stockStateAtModalOpen) {
-            const difference = newState[condition] - stockStateAtModalOpen[condition];
+            const difference = stockStateInModal[condition] - stockStateAtModalOpen[condition];
             if (difference !== 0) {
                 delta[condition] = difference;
                 hasChanges = true;
@@ -77,23 +76,17 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        // 2. Calculăm starea finală corectă pentru actualizarea optimistă
-        const finalState = { ...currentProduct.state };
-        for(const condition in delta){
-            finalState[condition] = (finalState[condition] || 0) + delta[condition];
-        }
-
-        // 3. Actualizare optimistă a UI-ului
-        AppState.updateProductState(currentCommandId, currentProductId, finalState);
+        // Pasul 2: Actualizare optimistă. Se aplică direct starea finală din fereastră. FĂRĂ CALCULE SUPLIMENTARE.
+        AppState.updateProductState(currentCommandId, currentProductId, stockStateInModal);
         renderStockLevels();
         hideModal();
 
-        // 4. Trimite la server în fundal
+        // Pasul 3: Trimite delta la server în fundal.
         const success = await sendStockUpdate(currentCommandId, currentProduct.asin, delta);
 
+        // Pasul 4: Dacă serverul eșuează, anulăm modificarea forțând o resincronizare.
         if (!success) {
             alert('Eroare de server! Modificarea a fost anulată. Se reîncarcă starea corectă.');
-            // Dacă serverul eșuează, forțăm o resincronizare completă pentru a preveni coruperea datelor
             await syncStateWithServer();
             renderStockLevels();
         }
@@ -102,9 +95,10 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- Logica pentru Modala de Stoc ---
 
     function showModal() {
-        // Facem o "poză" stocului LIVE exact când deschidem fereastra
+        // Se asigură că la fiecare deschidere, pornim de la starea "live" curentă.
+        currentProduct = AppState.getProductById(currentCommandId, currentProductId);
+
         stockStateAtModalOpen = { ...currentProduct.state };
-        // Creăm o copie separată pentru a o modifica
         stockStateInModal = { ...currentProduct.state };
 
         pageElements.stockModal.innerHTML = `
