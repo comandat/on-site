@@ -1,6 +1,7 @@
-document.addEventListener('DOMContentLoaded', () => {
-    console.log("Login script a pornit.");
+// scripts/login.js
+import { syncStateWithServer } from './data.js';
 
+document.addEventListener('DOMContentLoaded', () => {
     if (sessionStorage.getItem('isLoggedIn') === 'true') {
         window.location.href = 'main.html';
         return;
@@ -10,52 +11,10 @@ document.addEventListener('DOMContentLoaded', () => {
     const accessCodeInput = document.getElementById('access-code');
     const errorMessage = document.getElementById('error-message');
     const loginButton = document.getElementById('login-button');
-
-    if (!loginForm) {
-        console.error("Eroare critică: Formularul cu ID-ul 'login-form' nu a fost găsit.");
-        return;
-    }
-    
     const buttonText = loginButton.querySelector('.button-text');
     const buttonLoader = loginButton.querySelector('.button-loader');
-    
-    // URL-uri actualizate
+
     const loginWebhookUrl = 'https://automatizare.comandat.ro/webhook/637e1f6e-7beb-4295-89bd-4d7022f12d45';
-    const dataFetchWebhookUrl = 'https://automatizare.comandat.ro/webhook/5a447557-8d52-463e-8a26-5902ccee8177';
-
-
-    // Functia transformData rămâne aici.
-    const transformData = (rawData) => {
-        return Object.keys(rawData).map(commandId => {
-            const products = rawData[commandId] || [];
-            
-            const transformedProducts = products.map(product => {
-                return {
-                    id: product.productsku, 
-                    asin: product.asin,
-                    name: 'Încărcare...',
-                    imageUrl: '',
-                    expected: product.orderedquantity || 0,
-                    found: (product.bncondition || 0) + (product.vgcondition || 0) + (product.gcondition || 0) + (product.broken || 0),
-                    state: {
-                        'new': product.bncondition || 0,
-                        'very-good': product.vgcondition || 0,
-                        'good': product.gcondition || 0,
-                        'broken': product.broken || 0
-                    }
-                };
-            });
-
-            return {
-                id: commandId,
-                name: `Comanda #${commandId.substring(0, 12)}`,
-                date: new Date().toLocaleDateString('ro-RO'),
-                status: 'În Pregatire',
-                products: transformedProducts
-            };
-        });
-    };
-
 
     const performLogin = async (accessCode) => {
         errorMessage.textContent = '';
@@ -64,55 +23,43 @@ document.addEventListener('DOMContentLoaded', () => {
         buttonLoader.classList.remove('hidden');
 
         try {
-            // PAS 1: LOGIN (POST) - Folosește text/plain 
+            // PAS 1: Validare cod de acces
             const loginResponse = await fetch(loginWebhookUrl, {
                 method: 'POST',
-                headers: { 'Content-Type': 'text/plain' },
+                headers: { { 'Content-Type': 'text/plain' } },
                 body: JSON.stringify({ code: accessCode }),
             });
 
-            if (!loginResponse.ok) {
-                throw new Error(`Eroare de rețea la login: ${loginResponse.status}`);
-            }
-
-            const loginData = await loginResponse.json();
-            console.log("Răspuns primit de la webhook (Login):", loginData);
+            if (!loginResponse.ok) throw new Error(`Eroare de rețea la login: ${loginResponse.status}`);
             
-            if (loginData && loginData.status === 'success') {
-                sessionStorage.setItem('loggedInUser', loginData.user);
-                sessionStorage.setItem('lastAccessCode', accessCode); // Salvăm codul pentru Polling
-                
-                // PAS 2: DATA FETCH (POST) - Folosește text/plain pentru a evita CORS
-                const dataResponse = await fetch(dataFetchWebhookUrl, {
-                    method: 'POST', 
-                    headers: { 'Content-Type': 'text/plain' }, 
-                    body: JSON.stringify({ code: accessCode }), // Trimitem codul în corpul POST
-                });
-
-                if (!dataResponse.ok) {
-                    throw new Error(`Eroare de rețea la data fetch: ${dataResponse.status}`);
-                }
-
-                const dataFetchData = await dataResponse.json();
-                console.log("Răspuns primit de la webhook (Data Fetch):", dataFetchData);
-
-                if (dataFetchData && dataFetchData.status === 'success' && dataFetchData.data) {
-                    const transformedCommands = transformData(dataFetchData.data);
-                    localStorage.setItem('commandsData', JSON.stringify(transformedCommands));
-                    sessionStorage.setItem('isLoggedIn', 'true');
-                    window.location.href = 'main.html';
-                } else {
-                    errorMessage.textContent = 'Autentificare reușită, dar eroare la preluarea datelor.';
-                }
-
-            } else if (loginData && loginData.status === 'failed') {
-                errorMessage.textContent = 'Date incorecte';
-            } else {
-                errorMessage.textContent = 'Răspuns invalid de la server.';
+            const loginData = await loginResponse.json();
+            if (loginData?.status !== 'success') {
+                errorMessage.textContent = 'Cod de acces incorect.';
+                throw new Error('Login failed');
             }
+
+            // Salvează informațiile esențiale pentru sesiunea curentă
+            sessionStorage.setItem('loggedInUser', loginData.user);
+            sessionStorage.setItem('lastAccessCode', accessCode);
+
+            // PAS 2: Sincronizare completă a datelor folosind noul modul
+            // Această funcție va prelua datele de bază, va aplica modificările (delta)
+            // și va salva totul în sessionStorage, pregătit pentru restul aplicației.
+            const syncSuccess = await syncStateWithServer();
+
+            if (syncSuccess) {
+                sessionStorage.setItem('isLoggedIn', 'true');
+                window.location.href = 'main.html';
+            } else {
+                errorMessage.textContent = 'Autentificare reușită, dar eroare la sincronizarea datelor.';
+            }
+
         } catch (error) {
             console.error('Eroare la autentificare:', error);
-            errorMessage.textContent = 'Eroare la conectare. Verifică URL-ul și consola.';
+            // Afișăm un mesaj generic doar dacă nu am setat deja unul
+            if (!errorMessage.textContent) {
+                errorMessage.textContent = 'Eroare la conectare. Vă rugăm încercați din nou.';
+            }
         } finally {
             loginButton.disabled = false;
             buttonText.classList.remove('hidden');
@@ -121,8 +68,7 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     loginForm.addEventListener('submit', (event) => {
-        event.preventDefault(); 
-        console.log("Formular trimis și interceptat de JS.");
+        event.preventDefault();
         const accessCode = accessCodeInput.value.trim();
         if (accessCode) {
             performLogin(accessCode);
@@ -130,4 +76,7 @@ document.addEventListener('DOMContentLoaded', () => {
             errorMessage.textContent = 'Vă rugăm introduceți un cod.';
         }
     });
+
+    // Adaugă import-ul necesar în index.html
+    // Asigură-te că tag-ul script pentru login.js are type="module"
 });
