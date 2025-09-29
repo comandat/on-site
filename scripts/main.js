@@ -5,12 +5,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const container = document.getElementById('commands-list-container');
     if (!container) return;
 
-    // >>> ÎNCEPUT MODIFICARE: Curățare variabile de sesiune <<<
-    // Ne asigurăm că pagina principală (Comenzi) pornește dintr-o stare curată
-    sessionStorage.removeItem('currentCommandId');
-    sessionStorage.removeItem('currentProductId');
-    // >>> SFÂRȘIT MODIFICARE <<<
-
     const renderCommandsList = () => {
         const commands = AppState.getCommands();
 
