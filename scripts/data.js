@@ -40,15 +40,14 @@ export async function fetchDataAndSyncState() {
                         'good': p.gcondition || 0,
                         'broken': p.broken || 0
                     };
-                    const found = Object.values(state).reduce((sum, val) => sum + val, 0);
+                    const found = Object.values(state).reduce((sum, val) => Number(sum) + Number(val), 0);
                     return {
                         id: p.productsku,
                         asin: p.asin,
                         expected: p.orderedquantity || 0,
                         found: found,
                         state: state,
-                        // Am adăugat câmpul nou aici
-                        suggestedcondition: p.suggestedcondition || 'N/A' 
+                        suggestedcondition: p.suggestedcondition || 'N/A'
                     };
                 })
             };
