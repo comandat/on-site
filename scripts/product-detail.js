@@ -175,4 +175,112 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function hideModal() {
-        const modalContent = pageElements.stockModal.querySelector('
+        const modalContent = pageElements.stockModal.querySelector('div');
+        if (modalContent) {
+            modalContent.classList.replace('animate-slide-down', 'animate-slide-up');
+            setTimeout(() => {
+                pageElements.stockModal.classList.add('hidden');
+                pageElements.stockModal.innerHTML = '';
+            }, 300);
+        }
+    }
+
+    function createCounter(id, label, value, isDanger = false) {
+        return `
+            <div class="flex items-center justify-between py-3 border-b">
+                <span class="text-lg font-medium ${isDanger ? 'text-red-600' : 'text-gray-800'}">${label}</span>
+                <div class="flex items-center gap-3">
+                    <button data-action="minus" data-target="${id}" class="control-btn rounded-full bg-gray-200 w-8 h-8 flex items-center justify-center text-lg font-bold select-none">-</button>
+                    <input type="number" id="count-${id}" value="${value}" class="text-xl font-bold w-16 text-center border-gray-300 rounded-md shadow-sm">
+                    <button data-action="plus" data-target="${id}" class="control-btn rounded-full bg-gray-200 w-8 h-8 flex items-center justify-center text-lg font-bold select-none">+</button>
+                </div>
+            </div>`;
+    }
+
+    function updateValue(target, newValue) {
+        const cleanValue = Math.max(0, parseInt(newValue, 10) || 0);
+        stockStateInModal[target] = cleanValue;
+        document.getElementById(`count-${target}`).value = cleanValue;
+    }
+
+    function addModalEventListeners() {
+        pageElements.stockModal.querySelectorAll('.control-btn').forEach(button => {
+            const action = button.dataset.action;
+            const target = button.dataset.target;
+            clickHandler = () => {
+                const currentValue = Number(stockStateInModal[target]) || 0;
+                if (action === 'plus') updateValue(target, currentValue + 1);
+                else updateValue(target, currentValue - 1);
+            };
+            const startPress = (e) => {
+                e.preventDefault();
+                button.removeEventListener('click', clickHandler);
+                pressTimer = setTimeout(() => {
+                    if (action === 'minus') updateValue(target, 0);
+                    else if (action === 'plus') updateValue(target, currentProduct.expected);
+                }, 3000);
+            };
+            const endPress = () => {
+                clearTimeout(pressTimer);
+                setTimeout(() => button.addEventListener('click', clickHandler), 50);
+            };
+            button.addEventListener('mousedown', startPress);
+            button.addEventListener('mouseup', endPress);
+            button.addEventListener('mouseleave', endPress);
+            button.addEventListener('touchstart', startPress, { passive: false });
+            button.addEventListener('touchend', endPress);
+            button.addEventListener('click', clickHandler);
+        });
+        pageElements.stockModal.querySelectorAll('input[type="number"]').forEach(input => {
+            input.addEventListener('input', () => {
+                const target = input.id.replace('count-', '');
+                updateValue(target, input.value);
+            });
+        });
+        pageElements.stockModal.querySelector('#save-btn').addEventListener('click', handleSaveChanges);
+        pageElements.stockModal.querySelector('#close-modal-btn').addEventListener('click', hideModal);
+    }
+
+    async function initializePage() {
+        currentCommandId = sessionStorage.getItem('currentCommandId');
+        currentProductId = sessionStorage.getItem('currentProductId');
+        if (!currentCommandId || !currentProductId) {
+            window.location.href = 'main.html';
+            return;
+        }
+        await fetchDataAndSyncState();
+        currentProduct = getLatestProductData();
+        if (!currentProduct) {
+            alert('Produsul nu a fost gasit');
+            window.location.href = 'products.html';
+            return;
+        }
+        renderPageContent();
+        const details = await fetchProductDetailsInBulk([currentProduct.asin]);
+        const productDetails = details[currentProduct.asin];
+        pageElements.title.textContent = productDetails?.title || 'Nume indisponibil';
+        const images = productDetails?.images || [];
+        pageElements.imageWrapper.innerHTML = '';
+        if (images.length === 0) {
+            pageElements.imageWrapper.innerHTML = `<div class="swiper-slide bg-gray-200 flex items-center justify-center"><span class="material-symbols-outlined text-gray-400 text-6xl">hide_image</span></div>`;
+        } else {
+            images.forEach(imageUrl => {
+                const slide = document.createElement('div');
+                slide.className = 'swiper-slide';
+                slide.style.backgroundImage = `url('${imageUrl}')`;
+                pageElements.imageWrapper.appendChild(slide);
+            });
+        }
+        if (swiper) swiper.update();
+        else swiper = new Swiper('#image-swiper-container', { pagination: { el: '.swiper-pagination' } });
+        
+        pageElements.openModalButton.addEventListener('click', () => {
+            if (!isPrinterConnected()) {
+                showPrinterModal();
+            } else {
+                showModal();
+            }
+        });
+    }
+    initializePage();
+});
