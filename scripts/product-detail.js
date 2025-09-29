@@ -139,6 +139,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
 // scripts/product-detail.js
 
+// scripts/product-detail.js
+
 async function printLabel(productCode, conditionLabel, quantity = 1) {
     if (!isPrinterConnected()) throw new Error("Imprimanta nu este conectată.");
     
@@ -212,7 +214,7 @@ async function printLabel(productCode, conditionLabel, quantity = 1) {
         }
 
         await sendCommandAndWait(niimbotCharacteristic, createNiimbotPacket(0xE3, [1]));
-        // AICI AM ELIMINAT: await getPrintStatus(quantity);
+        // LINIa CARE CAUZA EROAREA A FOST ELIMINATĂ DE AICI
         await sendCommandAndWait(niimbotCharacteristic, createNiimbotPacket(0xF3, [1]));
     } catch (error) {
         console.error(`Eroare critică la printarea etichetei: ${textToPrint}`, error);
@@ -499,4 +501,5 @@ async function printLabel(productCode, conditionLabel, quantity = 1) {
     }
     initializePage();
 });
+
 
