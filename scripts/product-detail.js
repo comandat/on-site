@@ -3,8 +3,8 @@ import { AppState, fetchDataAndSyncState, sendStockUpdate, fetchProductDetailsIn
 
 document.addEventListener('DOMContentLoaded', () => {
     let currentCommandId = null;
-    let currentProductId = null;
-    let currentProduct = null;
+    let currentProductId = null; // Acesta este productsku
+    let currentProduct = null;   // Acesta conține toate detaliile, inclusiv .asin
     let swiper = null;
 
     let stockStateAtModalOpen = {};
@@ -24,6 +24,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function getLatestProductData() {
         const command = AppState.getCommands().find(c => c.id === currentCommandId);
+        // Căutăm produsul după ID-ul intern (productsku)
         return command ? command.products.find(p => p.id === currentProductId) : null;
     }
 
@@ -37,9 +38,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         for (const condition in currentProduct.state) {
             const element = document.querySelector(`[data-summary="${condition}"]`);
-            if (element) {
-                element.textContent = currentProduct.state[condition];
-            }
+            if (element) element.textContent = currentProduct.state[condition];
         }
     }
 
@@ -50,9 +49,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const delta = {};
         let hasChanges = false;
-        // LOGICA DE CALCUL CORECTATĂ ȘI GARANTATĂ
         for (const condition in stockStateAtModalOpen) {
-            // Asigurăm că ambele valori sunt numere înainte de a calcula diferența
             const before = Number(stockStateAtModalOpen[condition]) || 0;
             const after = Number(stockStateInModal[condition]) || 0;
             const difference = after - before;
@@ -68,7 +65,8 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        const success = await sendStockUpdate(currentCommandId, currentProductId, delta);
+        // AICI ESTE CORECTURA: Trimitem currentProduct.asin, nu currentProductId
+        const success = await sendStockUpdate(currentCommandId, currentProduct.asin, delta);
         hideModal();
 
         if (success) {
@@ -78,14 +76,13 @@ document.addEventListener('DOMContentLoaded', () => {
             alert('Eroare la salvare! Vă rugăm încercați din nou.');
         }
     }
-
+    
+    // ... restul funcțiilor (showModal, hideModal, etc.) rămân neschimbate
     function showModal() {
         currentProduct = getLatestProductData();
         if (!currentProduct) return;
-
         stockStateAtModalOpen = { ...currentProduct.state };
         stockStateInModal = { ...currentProduct.state };
-
         pageElements.stockModal.innerHTML = `
             <div class="absolute bottom-0 w-full max-w-md mx-auto left-0 right-0 bg-white rounded-t-2xl shadow-lg p-4 animate-slide-down">
                 <h3 class="text-xl font-bold text-center mb-4">Adaugă / Modifică Stoc</h3>
@@ -101,7 +98,6 @@ document.addEventListener('DOMContentLoaded', () => {
         addModalEventListeners();
         pageElements.stockModal.classList.remove('hidden');
     }
-
     function hideModal() {
         const modalContent = pageElements.stockModal.querySelector('div');
         if (modalContent) {
@@ -112,7 +108,6 @@ document.addEventListener('DOMContentLoaded', () => {
             }, 300);
         }
     }
-
     function createCounter(id, label, value, isDanger = false) {
         return `
             <div class="flex items-center justify-between py-3 border-b">
@@ -124,20 +119,15 @@ document.addEventListener('DOMContentLoaded', () => {
                 </div>
             </div>`;
     }
-
     function updateValue(target, newValue) {
         const cleanValue = Math.max(0, parseInt(newValue, 10) || 0);
         stockStateInModal[target] = cleanValue;
         document.getElementById(`count-${target}`).value = cleanValue;
     }
-
-    // LOGICA PENTRU EVENIMENTE A FOST COMPLET RESCRISĂ ȘI SIMPLIFICATĂ
     function addModalEventListeners() {
         pageElements.stockModal.querySelectorAll('.control-btn').forEach(button => {
             const action = button.dataset.action;
             const target = button.dataset.target;
-
-            // Funcția care se execută la un click normal
             clickHandler = () => {
                 const currentValue = Number(stockStateInModal[target]) || 0;
                 if (action === 'plus') {
@@ -146,25 +136,18 @@ document.addEventListener('DOMContentLoaded', () => {
                     updateValue(target, currentValue - 1);
                 }
             };
-            
-            // Logica pentru apăsare
             const startPress = (e) => {
                 e.preventDefault();
-                // Oprește click-ul normal să se execute la final
                 button.removeEventListener('click', clickHandler);
-                
                 pressTimer = setTimeout(() => {
                     if (action === 'minus') updateValue(target, 0);
                     else if (action === 'plus') updateValue(target, currentProduct.expected);
-                }, 3000); // 3 secunde
+                }, 3000);
             };
-
             const endPress = () => {
                 clearTimeout(pressTimer);
-                // Reactivează click-ul normal
                 setTimeout(() => button.addEventListener('click', clickHandler), 50);
             };
-
             button.addEventListener('mousedown', startPress);
             button.addEventListener('mouseup', endPress);
             button.addEventListener('mouseleave', endPress);
@@ -172,18 +155,15 @@ document.addEventListener('DOMContentLoaded', () => {
             button.addEventListener('touchend', endPress);
             button.addEventListener('click', clickHandler);
         });
-
         pageElements.stockModal.querySelectorAll('input[type="number"]').forEach(input => {
             input.addEventListener('input', () => {
                 const target = input.id.replace('count-', '');
                 updateValue(target, input.value);
             });
         });
-
         pageElements.stockModal.querySelector('#save-btn').addEventListener('click', handleSaveChanges);
         pageElements.stockModal.querySelector('#close-modal-btn').addEventListener('click', hideModal);
     }
-
     async function initializePage() {
         currentCommandId = sessionStorage.getItem('currentCommandId');
         currentProductId = sessionStorage.getItem('currentProductId');
@@ -191,7 +171,6 @@ document.addEventListener('DOMContentLoaded', () => {
             window.location.href = 'main.html';
             return;
         }
-
         await fetchDataAndSyncState();
         currentProduct = getLatestProductData();
         if (!currentProduct) {
@@ -199,9 +178,7 @@ document.addEventListener('DOMContentLoaded', () => {
             window.location.href = 'products.html';
             return;
         }
-
         renderPageContent();
-
         const details = await fetchProductDetailsInBulk([currentProduct.asin]);
         const productDetails = details[currentProduct.asin];
         pageElements.title.textContent = productDetails?.title || 'Nume indisponibil';
@@ -222,9 +199,7 @@ document.addEventListener('DOMContentLoaded', () => {
         } else {
             swiper = new Swiper('#image-swiper-container', { pagination: { el: '.swiper-pagination' } });
         }
-        
         pageElements.openModalButton.addEventListener('click', showModal);
     }
-
     initializePage();
 });
