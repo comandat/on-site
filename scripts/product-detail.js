@@ -1,5 +1,6 @@
 // scripts/product-detail.js
 import { AppState, fetchDataAndSyncState, sendStockUpdate, fetchProductDetailsInBulk } from './data.js';
+import { isPrinterConnected, connectToPrinter, printLabelQueue } from './printer-service.js';
 
 document.addEventListener('DOMContentLoaded', () => {
     let currentCommandId = null;
@@ -22,20 +23,27 @@ document.addEventListener('DOMContentLoaded', () => {
         openModalButton: document.getElementById('open-stock-modal-button')
     };
 
+    function showToast(message, duration = 3000) {
+        const toast = document.createElement('div');
+        toast.textContent = message;
+        toast.className = 'fixed bottom-5 left-1/2 -translate-x-1/2 bg-gray-800 text-white px-4 py-2 rounded-lg shadow-lg z-50';
+        document.body.appendChild(toast);
+        setTimeout(() => {
+            toast.remove();
+        }, duration);
+    }
+
     function getLatestProductData() {
         const command = AppState.getCommands().find(c => c.id === currentCommandId);
-        // Căutăm produsul după ID-ul intern (productsku)
         return command ? command.products.find(p => p.id === currentProductId) : null;
     }
 
     function renderPageContent() {
         currentProduct = getLatestProductData();
         if (!currentProduct) return;
-
         pageElements.expectedStock.textContent = currentProduct.expected;
         pageElements.suggestedCondition.textContent = currentProduct.suggestedcondition;
         pageElements.totalFound.textContent = currentProduct.found;
-
         for (const condition in currentProduct.state) {
             const element = document.querySelector(`[data-summary="${condition}"]`);
             if (element) element.textContent = currentProduct.state[condition];
@@ -53,7 +61,6 @@ document.addEventListener('DOMContentLoaded', () => {
             const before = Number(stockStateAtModalOpen[condition]) || 0;
             const after = Number(stockStateInModal[condition]) || 0;
             const difference = after - before;
-
             if (difference !== 0) {
                 delta[condition] = difference;
                 hasChanges = true;
@@ -65,19 +72,35 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        // AICI ESTE CORECTURA: Trimitem currentProduct.asin, nu currentProductId
         const success = await sendStockUpdate(currentCommandId, currentProduct.asin, delta);
-        hideModal();
-
+        
         if (success) {
             await fetchDataAndSyncState();
             renderPageContent();
+
+            const conditionMap = { 'new': 'CN', 'very-good': 'FB', 'good': 'B' };
+            const queue = [];
+            for (const condition in delta) {
+                if (delta[condition] > 0 && conditionMap[condition]) {
+                    for (let i = 0; i < delta[condition]; i++) {
+                        queue.push({ code: currentProduct.asin, conditionLabel: conditionMap[condition] });
+                    }
+                }
+            }
+            
+            hideModal();
+
+            if (queue.length > 0) {
+                await printLabelQueue(queue, (status) => showToast(status, 4000));
+            }
+
         } else {
             alert('Eroare la salvare! Vă rugăm încercați din nou.');
+            saveButton.disabled = false;
+            saveButton.textContent = 'Salvează';
         }
     }
     
-    // ... restul funcțiilor (showModal, hideModal, etc.) rămân neschimbate
     function showModal() {
         currentProduct = getLatestProductData();
         if (!currentProduct) return;
@@ -98,6 +121,7 @@ document.addEventListener('DOMContentLoaded', () => {
         addModalEventListeners();
         pageElements.stockModal.classList.remove('hidden');
     }
+
     function hideModal() {
         const modalContent = pageElements.stockModal.querySelector('div');
         if (modalContent) {
@@ -108,6 +132,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }, 300);
         }
     }
+
     function createCounter(id, label, value, isDanger = false) {
         return `
             <div class="flex items-center justify-between py-3 border-b">
@@ -119,22 +144,21 @@ document.addEventListener('DOMContentLoaded', () => {
                 </div>
             </div>`;
     }
+
     function updateValue(target, newValue) {
         const cleanValue = Math.max(0, parseInt(newValue, 10) || 0);
         stockStateInModal[target] = cleanValue;
         document.getElementById(`count-${target}`).value = cleanValue;
     }
+
     function addModalEventListeners() {
         pageElements.stockModal.querySelectorAll('.control-btn').forEach(button => {
             const action = button.dataset.action;
             const target = button.dataset.target;
             clickHandler = () => {
                 const currentValue = Number(stockStateInModal[target]) || 0;
-                if (action === 'plus') {
-                    updateValue(target, currentValue + 1);
-                } else {
-                    updateValue(target, currentValue - 1);
-                }
+                if (action === 'plus') updateValue(target, currentValue + 1);
+                else updateValue(target, currentValue - 1);
             };
             const startPress = (e) => {
                 e.preventDefault();
@@ -164,6 +188,7 @@ document.addEventListener('DOMContentLoaded', () => {
         pageElements.stockModal.querySelector('#save-btn').addEventListener('click', handleSaveChanges);
         pageElements.stockModal.querySelector('#close-modal-btn').addEventListener('click', hideModal);
     }
+
     async function initializePage() {
         currentCommandId = sessionStorage.getItem('currentCommandId');
         currentProductId = sessionStorage.getItem('currentProductId');
@@ -194,12 +219,17 @@ document.addEventListener('DOMContentLoaded', () => {
                 pageElements.imageWrapper.appendChild(slide);
             });
         }
-        if (swiper) { 
-            swiper.update();
-        } else {
-            swiper = new Swiper('#image-swiper-container', { pagination: { el: '.swiper-pagination' } });
-        }
-        pageElements.openModalButton.addEventListener('click', showModal);
+        if (swiper) swiper.update();
+        else swiper = new Swiper('#image-swiper-container', { pagination: { el: '.swiper-pagination' } });
+        
+        pageElements.openModalButton.addEventListener('click', () => {
+            if (!isPrinterConnected()) {
+                sessionStorage.setItem('redirectAfterPrint', window.location.href);
+                window.location.href = 'printer.html';
+            } else {
+                showModal();
+            }
+        });
     }
     initializePage();
 });
