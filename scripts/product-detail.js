@@ -8,7 +8,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     let currentCommandId = null;
     let currentProductId = null;
-
     let currentProduct = null;
     let swiper = null;
 
