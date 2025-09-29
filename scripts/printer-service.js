@@ -140,11 +140,6 @@ async function printSingleLabel(productCode, conditionLabel, statusCallback) {
 
         const verticalOffset = 10;
         
-        const qrScript = document.createElement('script');
-        qrScript.src = "https://unpkg.com/qrcode-generator@1.0.1/qrcode.js";
-        document.head.appendChild(qrScript);
-        await new Promise(resolve => qrScript.onload = resolve);
-        
         const qr = qrcode(0, 'M');
         qr.addData(textToPrint);
         qr.make();
@@ -215,17 +210,4 @@ export async function printLabelQueue(queue, statusCallback) {
     
     if (statusCallback) statusCallback(`Se inițiază imprimarea pentru ${queue.length} etichete...`);
     
-    for (let i = 0; i < queue.length; i++) {
-        const { code, conditionLabel } = queue[i];
-        try {
-            if (statusCallback) statusCallback(`Se printează ${i + 1} din ${queue.length}: ${code}${conditionLabel}`);
-            await printSingleLabel(code, conditionLabel, null); // Nu pasam statusCallback la functia individuala
-            await new Promise(res => setTimeout(res, 500)); 
-        } catch (e) {
-            console.error("Eroare la imprimarea etichetei:", e);
-             if (statusCallback) statusCallback(`Eroare la eticheta ${i + 1}. Procesul s-a oprit.`);
-            return;
-        }
-    }
-    if (statusCallback) statusCallback(`S-a finalizat imprimarea celor ${queue.length} etichete.`);
-}
+    for (let i = 0; i
