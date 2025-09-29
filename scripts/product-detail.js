@@ -34,8 +34,8 @@ document.addEventListener('DOMContentLoaded', () => {
             toast.remove();
         }, duration);
     }
-
-    // --- START: NOUA LOGICĂ DE PRINTARE, ALINIATĂ CU NIIMPRINTX ---
+    
+    // --- START: LOGICA DE PRINTARE (CU DIAGNOSTICARE INCLUSĂ) ---
     function isPrinterConnected() {
         return niimbotCharacteristic !== null;
     }
@@ -69,26 +69,26 @@ document.addEventListener('DOMContentLoaded', () => {
 
     async function getPrintStatus(expectedPage) {
         if (!isPrinterConnected()) throw new Error("Imprimanta nu este conectată.");
-        for (let i = 0; i < 50; i++) { // Încearcă maxim 10 secunde
+        for (let i = 0; i < 50; i++) { 
             try {
-                // FOLOSIM COMANDA CORECTĂ PENTRU STAREA PRINTĂRII: 0xA3
-                const statusPacket = createNiimbotPacket(0xA3, [1]);
+                // Protocolul vechi (niimprintx) pentru status
+                const statusPacket = createNiimbotPacket(0xA3, [1]); 
                 const response = await sendCommandAndWait(niimbotCharacteristic, statusPacket, 500);
-                // Răspunsul conține pagina curentă la un anumit index
                 if (response && response.length > 2) {
                     const currentPage = response[2];
                     if (currentPage === expectedPage) {
-                        return; // Am ajuns la pagina așteptată, putem continua
+                        return; 
                     }
                 }
             } catch (e) {
-                // Ignorăm erorile de timeout și reîncercăm
+                // Ignoră timeout și reîncearcă
             }
             await new Promise(res => setTimeout(res, 200));
         }
         throw new Error("Imprimanta nu a confirmat printarea paginii în timp util.");
     }
     
+    // --- START MODIFICARE: Funcție de conectare cu diagnosticare ---
     async function connectToPrinter(statusCallback) {
         if (isPrinterConnected()) {
             if (statusCallback) statusCallback("Deja conectat.");
@@ -108,7 +108,23 @@ document.addEventListener('DOMContentLoaded', () => {
             
             if (statusCallback) statusCallback(`Conectare la ${device.name}...`);
             const server = await device.gatt.connect();
+            
+            console.clear();
+            console.log(`%c--- DIAGNOSTICARE BLUETOOTH PENTRU ${device.name} ---`, 'color: blue; font-weight: bold;');
+
             const services = await server.getPrimaryServices();
+            for (const service of services) {
+                console.log(`%cServiciu găsit: ${service.uuid}`, 'color: green;');
+                const characteristics = await service.getCharacteristics();
+                for (const characteristic of characteristics) {
+                    const props = Object.keys(characteristic.properties)
+                        .filter(key => characteristic.properties[key] === true)
+                        .join(', ');
+                    console.log(`  -> Caracteristică: ${characteristic.uuid} | Proprietăți: [${props}]`);
+                }
+            }
+            console.log(`%c--- FINAL DIAGNOSTICARE ---`, 'color: blue; font-weight: bold;');
+            
             let foundCharacteristic = null;
             for (const service of services) {
                 const characteristics = await service.getCharacteristics();
@@ -139,6 +155,7 @@ document.addEventListener('DOMContentLoaded', () => {
             return false;
         }
     }
+    // --- FINAL MODIFICARE ---
 
     async function printLabel(productCode, conditionLabel, quantity = 1) {
         if (!isPrinterConnected()) throw new Error("Imprimanta nu este conectată.");
@@ -198,30 +215,28 @@ document.addEventListener('DOMContentLoaded', () => {
             const write = (packet) => niimbotCharacteristic.writeValueWithoutResponse(packet);
             const delay = ms => new Promise(res => setTimeout(res, ms));
 
-            // FOLOSIM SECVENȚA DE COMENZI DIN NIIMPRINTX
-            await sendCommandAndWait(niimbotCharacteristic, createNiimbotPacket(0x21, [3])); // SetLabelDensity
-            await sendCommandAndWait(niimbotCharacteristic, createNiimbotPacket(0x23, [1])); // SetLabelType
-            await sendCommandAndWait(niimbotCharacteristic, createNiimbotPacket(0x01, [1])); // StartPrint
-            await sendCommandAndWait(niimbotCharacteristic, createNiimbotPacket(0x03, [1])); // StartPagePrint
+            await sendCommandAndWait(niimbotCharacteristic, createNiimbotPacket(0x21, [3]));
+            await sendCommandAndWait(niimbotCharacteristic, createNiimbotPacket(0x23, [1]));
+            await sendCommandAndWait(niimbotCharacteristic, createNiimbotPacket(0x01, [1]));
+            await sendCommandAndWait(niimbotCharacteristic, createNiimbotPacket(0x03, [1]));
             
             const dimensionData = [(canvas.height >> 8) & 0xFF, canvas.height & 0xFF, (canvas.width >> 8) & 0xFF, canvas.width & 0xFF];
-            await sendCommandAndWait(niimbotCharacteristic, createNiimbotPacket(0x13, dimensionData)); // SetDimension
-            await sendCommandAndWait(niimbotCharacteristic, createNiimbotPacket(0x15, [0, quantity])); // SetQuantity
+            await sendCommandAndWait(niimbotCharacteristic, createNiimbotPacket(0x13, dimensionData));
+            await sendCommandAndWait(niimbotCharacteristic, createNiimbotPacket(0x15, [0, quantity]));
             
             for (const packet of imagePackets) {
                 await write(packet);
                 await delay(20);
             }
 
-            await sendCommandAndWait(niimbotCharacteristic, createNiimbotPacket(0xE3, [1])); // EndPagePrint
-            await getPrintStatus(quantity); // Așteptăm ca imprimanta să confirme printarea tuturor paginilor
-            await sendCommandAndWait(niimbotCharacteristic, createNiimbotPacket(0xF3, [1])); // EndPrint
+            await sendCommandAndWait(niimbotCharacteristic, createNiimbotPacket(0xE3, [1]));
+            await getPrintStatus(quantity);
+            await sendCommandAndWait(niimbotCharacteristic, createNiimbotPacket(0xF3, [1]));
         } catch (error) {
             console.error(`Eroare critică la printarea etichetei: ${textToPrint}`, error);
             throw error;
         }
     }
-    // --- FINAL: Logica de printare ---
 
     function getLatestProductData() {
         const command = AppState.getCommands().find(c => c.id === currentCommandId);
@@ -248,10 +263,8 @@ document.addEventListener('DOMContentLoaded', () => {
         const productAsinForPrinting = currentProduct.asin;
         
         if (typeof productAsinForPrinting !== 'string' || productAsinForPrinting.trim() === '') {
-            const errorMessage = `EROARE: Imprimarea a fost oprită deoarece produsul curent (ID: ${currentProduct.id}) nu are un cod ASIN valid. Valoare primită: '${productAsinForPrinting}'.`;
-            console.error(errorMessage);
+            const errorMessage = `EROARE: Imprimarea a fost oprită deoarece produsul curent (ID: ${currentProduct.id}) nu are un cod ASIN valid.`;
             alert(errorMessage); 
-            
             saveButton.disabled = false;
             saveButton.textContent = 'Salvează';
             return;
