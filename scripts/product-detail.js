@@ -1,8 +1,12 @@
 // scripts/product-detail.js
 import { AppState, fetchDataAndSyncState, sendStockUpdate, fetchProductDetailsInBulk } from './data.js';
-import { isPrinterConnected, connectToPrinter, printSingleLabel } from './printer-service.js';
 
 document.addEventListener('DOMContentLoaded', () => {
+    // --- START: Variabilele pentru printare și starea aplicației ---
+    let niimbotCharacteristic = null;
+    let isConnecting = false;
+    let responseResolver = null;
+
     let currentCommandId = null;
     let currentProductId = null;
     let currentProduct = null;
@@ -12,6 +16,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let stockStateInModal = {};
     let pressTimer = null;
     let clickHandler = null;
+    // --- FINAL: Variabile ---
 
     const pageElements = {
         title: document.getElementById('product-detail-title'),
@@ -21,10 +26,12 @@ document.addEventListener('DOMContentLoaded', () => {
         imageWrapper: document.getElementById('product-image-wrapper'),
         stockModal: document.getElementById('stock-modal'),
         printerModal: document.getElementById('printer-modal'),
-        openModalButton: document.getElementById('open-stock-modal-button')
+        openModalButton: document.getElementById('open-stock-modal-button'),
+        footerPrinterButton: document.getElementById('footer-printer-button')
     };
 
     function showToast(message, duration = 3000) {
+        // ... (codul rămâne neschimbat)
         const toast = document.createElement('div');
         toast.textContent = message;
         toast.className = 'fixed bottom-5 left-1/2 -translate-x-1/2 bg-gray-800 text-white px-4 py-2 rounded-lg shadow-lg z-50';
@@ -33,13 +40,190 @@ document.addEventListener('DOMContentLoaded', () => {
             toast.remove();
         }, duration);
     }
+    
+    // --- START: Toată logica de printare, mutată aici ---
+    function isPrinterConnected() {
+        return niimbotCharacteristic !== null;
+    }
+
+    function createNiimbotPacket(type, data) {
+        const dataBytes = Array.isArray(data) ? data : [data];
+        const checksum = dataBytes.reduce((acc, byte) => acc ^ byte, type ^ dataBytes.length);
+        const packet = [0x55, 0x55, type, dataBytes.length, ...dataBytes, checksum, 0xAA, 0xAA];
+        return new Uint8Array(packet);
+    }
+
+    function handleCharacteristicValueChanged(event) {
+        if (responseResolver) {
+            const value = new Uint8Array(event.target.value.buffer);
+            responseResolver(value);
+            responseResolver = null;
+        }
+    }
+
+    async function sendCommandAndWait(characteristic, packet) {
+        return new Promise((resolve, reject) => {
+            responseResolver = resolve;
+            const timeout = setTimeout(() => {
+                if (responseResolver) {
+                    responseResolver = null;
+                    reject(new Error('Timeout: Imprimanta nu a răspuns.'));
+                }
+            }, 5000);
+
+            characteristic.writeValueWithoutResponse(packet).catch(err => {
+                clearTimeout(timeout);
+                reject(err);
+            });
+        });
+    }
+
+    async function connectToPrinter(statusCallback) {
+        if (isPrinterConnected()) {
+            if (statusCallback) statusCallback("Deja conectat.");
+            return true;
+        }
+        if (isConnecting) {
+             if (statusCallback) statusCallback("Conectarea este deja în progres...");
+            return false;
+        }
+        isConnecting = true;
+        try {
+            if (statusCallback) statusCallback('Se caută imprimante...');
+            const device = await navigator.bluetooth.requestDevice({
+                filters: [{ namePrefix: 'D' }],
+                optionalServices: ['e7810a71-73ae-499d-8c15-faa9aef0c3f2', '49535343-fe7d-4ae5-8fa9-9fafd205e455']
+            });
+            
+            if (statusCallback) statusCallback(`Conectare la ${device.name}...`);
+            const server = await device.gatt.connect();
+            if (statusCallback) statusCallback('Se accesează serviciile...');
+            const services = await server.getPrimaryServices();
+            if (statusCallback) statusCallback('Se caută caracteristica potrivită...');
+            
+            let foundCharacteristic = null;
+            for (const service of services) {
+                const characteristics = await service.getCharacteristics();
+                for (const char of characteristics) {
+                    if (char.properties.writeWithoutResponse && char.properties.notify) {
+                        foundCharacteristic = char;
+                        break; 
+                    }
+                }
+                if (foundCharacteristic) break;
+            }
+
+            if (!foundCharacteristic) {
+                throw new Error('Nu am găsit o caracteristică potrivită pentru imprimare.');
+            }
+            
+            niimbotCharacteristic = foundCharacteristic;
+            await niimbotCharacteristic.startNotifications();
+            niimbotCharacteristic.addEventListener('characteristicvaluechanged', handleCharacteristicValueChanged);
+            if (statusCallback) statusCallback(`Conectat la ${device.name}. Gata de imprimare.`);
+            
+            device.addEventListener('gattserverdisconnected', () => {
+                showToast('Imprimanta a fost deconectată.');
+                niimbotCharacteristic = null;
+            });
+            isConnecting = false;
+            return true;
+        } catch (error) {
+            if (statusCallback) statusCallback(`Eroare: ${error.message}`);
+            niimbotCharacteristic = null;
+            isConnecting = false;
+            return false;
+        }
+    }
+
+    async function printSingleLabel(productCode, conditionLabel) {
+        if (!isPrinterConnected()) {
+            throw new Error("Imprimanta nu este conectată.");
+        }
+        const textToPrint = `${productCode}${conditionLabel}`;
+        try {
+            const labelWidth = 240;
+            const labelHeight = 120;
+            const canvas = document.createElement('canvas');
+            canvas.width = labelHeight;
+            canvas.height = labelWidth;
+            const ctx = canvas.getContext('2d');
+            
+            ctx.fillStyle = 'black';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.save();
+            ctx.translate(canvas.width / 2, canvas.height / 2);
+            ctx.rotate(90 * Math.PI / 180);
+            const verticalOffset = 10;
+            
+            const qr = qrcode(0, 'M');
+            qr.addData(textToPrint);
+            qr.make();
+            const qrImg = new Image();
+            qrImg.src = qr.createDataURL(6, 2);
+            await new Promise(resolve => { qrImg.onload = resolve; });
+            
+            const qrSize = 85; 
+            ctx.drawImage(qrImg, -labelWidth / 2 + 15, -labelHeight / 2 + 18 + verticalOffset, qrSize, qrSize);
+            ctx.fillStyle = 'white';
+            ctx.font = 'bold 30px Arial'; 
+            ctx.textAlign = 'left';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(textToPrint, -labelWidth / 2 + qrSize + 30, 0 + verticalOffset);
+            ctx.restore();
+            
+            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            const imagePackets = [];
+            const widthInBytes = Math.ceil(canvas.width / 8);
+
+            for (let y = 0; y < canvas.height; y++) {
+                let lineBytes = new Uint8Array(widthInBytes);
+                for (let x = 0; x < canvas.width; x++) {
+                    const pixelIndex = (y * canvas.width + x) * 4;
+                    const pixelValue = imageData.data[pixelIndex] > 128 ? 1 : 0;
+                    if (pixelValue === 1) {
+                        lineBytes[Math.floor(x / 8)] |= (1 << (7 - (x % 8)));
+                    }
+                }
+                const header = [(y >> 8) & 0xFF, y & 0xFF, 0, 0, 0, 1];
+                const dataPayload = Array.from(new Uint8Array([...header, ...lineBytes]));
+                imagePackets.push(createNiimbotPacket(0x85, dataPayload));
+            }
+
+            const delay = ms => new Promise(res => setTimeout(res, ms));
+
+            await sendCommandAndWait(niimbotCharacteristic, createNiimbotPacket(0x21, [3]));
+            await sendCommandAndWait(niimbotCharacteristic, createNiimbotPacket(0x23, [1]));
+            await sendCommandAndWait(niimbotCharacteristic, createNiimbotPacket(0x01, [1]));
+            await sendCommandAndWait(niimbotCharacteristic, createNiimbotPacket(0x03, [1]));
+            const dimensionData = [(canvas.height >> 8) & 0xFF, canvas.height & 0xFF, (canvas.width >> 8) & 0xFF, canvas.width & 0xFF];
+            await sendCommandAndWait(niimbotCharacteristic, createNiimbotPacket(0x13, dimensionData));
+            await sendCommandAndWait(niimbotCharacteristic, createNiimbotPacket(0x15, [0, 1]));
+
+            for (const packet of imagePackets) {
+                await niimbotCharacteristic.writeValueWithoutResponse(packet);
+                await delay(20);
+            }
+
+            await sendCommandAndWait(niimbotCharacteristic, createNiimbotPacket(0xE3, [1]));
+            await sendCommandAndWait(niimbotCharacteristic, createNiimbotPacket(0xF3, [1])); 
+
+        } catch (error) {
+            console.error(`Eroare critică la printarea etichetei: ${textToPrint}`, error);
+            throw error;
+        }
+    }
+    // --- FINAL: Logica de printare ---
+
 
     function getLatestProductData() {
+        // ... (codul rămâne neschimbat)
         const command = AppState.getCommands().find(c => c.id === currentCommandId);
         return command ? command.products.find(p => p.id === currentProductId) : null;
     }
 
     function renderPageContent() {
+        // ... (codul rămâne neschimbat)
         currentProduct = getLatestProductData();
         if (!currentProduct) return;
         pageElements.expectedStock.textContent = currentProduct.expected;
@@ -52,6 +236,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     async function handleSaveChanges() {
+        // ... (logica de aici este identică cu versiunea anterioară, apelând bucla de printare)
         const saveButton = document.getElementById('save-btn');
         saveButton.disabled = true;
         saveButton.textContent = 'Se salvează...';
@@ -86,29 +271,28 @@ document.addEventListener('DOMContentLoaded', () => {
             for (const condition in delta) {
                 if (delta[condition] > 0 && conditionMap[condition]) {
                     for (let i = 0; i < delta[condition]; i++) {
-                        printQueue.push({ code: String(productAsinForPrinting), conditionLabel: conditionMap[condition] });
+                        printQueue.push({ code: productAsinForPrinting, conditionLabel: conditionMap[condition] });
                     }
                 }
             }
             
             hideModal();
 
-            // --- MODIFICARE AICI: Bucla de printare este acum aici ---
             if (printQueue.length > 0) {
                 showToast(`Se inițiază imprimarea pentru ${printQueue.length} etichete...`);
                 for (let i = 0; i < printQueue.length; i++) {
                     const item = printQueue[i];
                     try {
-                        showToast(`Se printează ${i + 1} din ${printQueue.length}: ${item.code}${item.conditionLabel}`);
+                        showToast(`Se printează ${i + 1}/${printQueue.length}: ${item.code}`);
                         await printSingleLabel(item.code, item.conditionLabel);
-                        await new Promise(res => setTimeout(res, 500)); // Pauză între printări
+                        await new Promise(res => setTimeout(res, 800)); // Pauză între etichete
                     } catch (e) {
                         showToast(`Eroare la eticheta ${i + 1}. Procesul s-a oprit.`);
-                        console.error("Eroare la imprimarea etichetei:", e);
-                        return; // Oprim procesul dacă o etichetă eșuează
+                        console.error("Eroare la imprimare:", e);
+                        return;
                     }
                 }
-                showToast(`S-a finalizat imprimarea celor ${printQueue.length} etichete.`);
+                showToast(`S-a finalizat imprimarea.`);
             }
 
         } else {
@@ -119,6 +303,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     
     function showPrinterModal() {
+        // ... (codul rămâne neschimbat)
         pageElements.printerModal.classList.remove('hidden');
         pageElements.printerModal.innerHTML = `
             <div class="absolute bottom-0 w-full max-w-md mx-auto left-0 right-0 bg-white rounded-t-2xl shadow-lg p-4 animate-slide-down">
@@ -159,6 +344,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function hidePrinterModal() {
+        // ... (codul rămâne neschimbat)
         const modalContent = pageElements.printerModal.querySelector('div');
         if (modalContent) {
             modalContent.classList.replace('animate-slide-down', 'animate-slide-up');
@@ -170,6 +356,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function showModal() {
+        // ... (codul rămâne neschimbat)
         currentProduct = getLatestProductData();
         if (!currentProduct) return;
         stockStateAtModalOpen = { ...currentProduct.state };
@@ -191,6 +378,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function hideModal() {
+        // ... (codul rămâne neschimbat)
         const modalContent = pageElements.stockModal.querySelector('div');
         if (modalContent) {
             modalContent.classList.replace('animate-slide-down', 'animate-slide-up');
@@ -202,6 +390,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function createCounter(id, label, value, isDanger = false) {
+        // ... (codul rămâne neschimbat)
         return `
             <div class="flex items-center justify-between py-3 border-b">
                 <span class="text-lg font-medium ${isDanger ? 'text-red-600' : 'text-gray-800'}">${label}</span>
@@ -214,12 +403,14 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function updateValue(target, newValue) {
+        // ... (codul rămâne neschimbat)
         const cleanValue = Math.max(0, parseInt(newValue, 10) || 0);
         stockStateInModal[target] = cleanValue;
         document.getElementById(`count-${target}`).value = cleanValue;
     }
 
     function addModalEventListeners() {
+        // ... (codul rămâne neschimbat)
         pageElements.stockModal.querySelectorAll('.control-btn').forEach(button => {
             const action = button.dataset.action;
             const target = button.dataset.target;
@@ -258,6 +449,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     async function initializePage() {
+        // ... (codul rămâne neschimbat)
         currentCommandId = sessionStorage.getItem('currentCommandId');
         currentProductId = sessionStorage.getItem('currentProductId');
         if (!currentCommandId || !currentProductId) {
@@ -290,13 +482,16 @@ document.addEventListener('DOMContentLoaded', () => {
         if (swiper) swiper.update();
         else swiper = new Swiper('#image-swiper-container', { pagination: { el: '.swiper-pagination' } });
         
-        pageElements.openModalButton.addEventListener('click', () => {
+        const openModalFlow = () => {
             if (!isPrinterConnected()) {
                 showPrinterModal();
             } else {
                 showModal();
             }
-        });
+        };
+
+        pageElements.openModalButton.addEventListener('click', openModalFlow);
+        pageElements.footerPrinterButton.addEventListener('click', openModalFlow);
     }
     initializePage();
 });
