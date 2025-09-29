@@ -289,10 +289,14 @@ async function printLabel(productCode, conditionLabel, quantity = 1) {
                     try {
                         showToast(`Se printează ${item.quantity} etichete pentru ${item.code}`);
                         await printLabel(item.code, item.conditionLabel, item.quantity);
+                        
+                        // --- MODIFICARE: Așteaptă o secundă înainte de următoarea etichetă ---
+                        await new Promise(resolve => setTimeout(resolve, 1000)); 
+
                     } catch (e) {
                         showToast(`Eroare la imprimare. Procesul s-a oprit.`);
                         console.error("Eroare la imprimare:", e);
-                        return;
+                        return; // Oprește procesul dacă apare o eroare
                     }
                 }
                 showToast(`S-a finalizat imprimarea.`);
@@ -490,6 +494,7 @@ async function printLabel(productCode, conditionLabel, quantity = 1) {
     }
     initializePage();
 });
+
 
 
 
