@@ -46,6 +46,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
             if (syncSuccess) {
                 sessionStorage.setItem('isLoggedIn', 'true');
+                
+                // FIXUL SIGUR: Curățăm variabilele de context ale produsului AICI
+                sessionStorage.removeItem('currentCommandId');
+                sessionStorage.removeItem('currentProductId');
+                
                 window.location.href = 'main.html';
             } else {
                 errorMessage.textContent = 'Autentificare reușită, dar eroare la sincronizarea datelor.';
