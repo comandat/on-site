@@ -74,10 +74,10 @@
                     <span class="material-symbols-outlined">apps</span>
                     <span class="text-xs">Comenzi</span>
                 </a>
-                <a href="products.html" class="flex flex-col items-center gap-1 p-2 text-[var(--primary-color)]">
-                    <span class="material-symbols-outlined">inventory_2</span>
-                    <span class="text-xs">Produse</span>
-                </a>
+                <button id="footer-search-trigger" class="flex flex-col items-center gap-1 p-2 text-[var(--primary-color)]">
+                    <span class="material-symbols-outlined">search</span>
+                    <span class="text-xs">Căutare</span>
+                </button>
                 <a href="printer.html" class="flex flex-col items-center gap-1 p-2 text-gray-500 hover:text-[var(--primary-color)]">
                     <span class="material-symbols-outlined">print</span>
                     <span class="text-xs">Imprimante</span>
@@ -88,12 +88,26 @@
 </div>
 
 <div id="stock-modal" class="fixed inset-0 z-50 hidden bg-black/40"></div>
-<div id="search-overlay" class="fixed inset-0 z-30 hidden"></div>
+<div id="search-overlay" class="fixed inset-0 z-50 hidden bg-white flex flex-col">
+    <div class="p-4 border-b border-gray-200 shadow-sm flex items-center gap-2">
+        <button id="close-search-button" class="h-10 w-10 flex items-center justify-center rounded-full text-gray-600 hover:bg-gray-100">
+            <span class="material-symbols-outlined">arrow_back</span>
+        </button>
+        <div class="relative flex-1">
+            <input type="text" id="search-input" placeholder="Caută Produs (Titlu, ASIN, SKU)" 
+                   class="w-full pl-4 pr-10 py-2 border border-gray-300 rounded-full focus:border-[var(--primary-color)] focus:ring-[var(--primary-color)]">
+            <span class="material-symbols-outlined absolute right-3 top-1/2 -translate-y-1/2 text-gray-400">search</span>
+        </div>
+    </div>
+    <div id="search-results-container" class="flex-1 overflow-y-auto bg-gray-100 divide-y divide-gray-200">
+        </div>
+</div>
 
 <script src="https://cdn.jsdelivr.net/npm/swiper@11/swiper-bundle.min.js"></script>
 
 <script src="scripts/data.js?v=1" type="module"></script>
 <script src="scripts/product-detail.js?v=1" type="module"></script>
+<script src="scripts/search-handler.js"></script>
 
 </body>
 </html>
