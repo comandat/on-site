@@ -40,7 +40,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }, duration);
     }
     
-    // --- START: Toată logica de printare, identică cu scriptul original ---
+    // --- START: Logica de printare ---
     function isPrinterConnected() {
         return niimbotCharacteristic !== null;
     }
@@ -136,21 +136,18 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     async function printSingleLabel(productCode, conditionLabel) {
+        console.log(`[PRINTARE PAS 1] Funcția 'printSingleLabel' a fost apelată.`);
+        console.log(`[PRINTARE PAS 1] Valoare 'productCode' primită:`, productCode);
+        console.log(`[PRINTARE PAS 1] Valoare 'conditionLabel' primită:`, conditionLabel);
+
         if (!isPrinterConnected()) {
+            console.error("[PRINTARE EROARE] Imprimanta nu este conectată. Proces anulat.");
             throw new Error("Imprimanta nu este conectată.");
         }
         
-        // --- START CORECȚIE EROARE ---
-        // Verificăm dacă productCode este un string valid și non-gol
-        if (typeof productCode !== 'string' || productCode.trim().length === 0) {
-            const errorMsg = `Cod de produs invalid pentru generarea etichetei: '${productCode}'`;
-            console.error(errorMsg);
-            showToast('Eroare: Cod de produs lipsă pentru etichetă.');
-            throw new Error(errorMsg);
-        }
-        // --- FINAL CORECȚIE EROARE ---
-
         const textToPrint = `${productCode}${conditionLabel}`;
+        console.log(`[PRINTARE PAS 2] Textul final pentru QR este: '${textToPrint}'`);
+
         try {
             const labelWidth = 240;
             const labelHeight = 120;
@@ -158,6 +155,7 @@ document.addEventListener('DOMContentLoaded', () => {
             canvas.width = labelHeight;
             canvas.height = labelWidth;
             const ctx = canvas.getContext('2d');
+            console.log(`[PRINTARE PAS 3] Canvas creat cu dimensiunile: lățime=${canvas.width}, înălțime=${canvas.height}`);
             
             ctx.fillStyle = 'black';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -166,9 +164,12 @@ document.addEventListener('DOMContentLoaded', () => {
             ctx.rotate(90 * Math.PI / 180);
             const verticalOffset = 10;
             
+            console.log(`[PRINTARE PAS 4] Se generează codul QR pentru textul: '${textToPrint}'`);
             const qr = qrcode(0, 'M');
             qr.addData(textToPrint);
             qr.make();
+            console.log(`[PRINTARE PAS 4] Codul QR a fost generat cu succes.`);
+
             const qrImg = new Image();
             qrImg.src = qr.createDataURL(6, 2);
             await new Promise(resolve => { qrImg.onload = resolve; });
@@ -181,7 +182,8 @@ document.addEventListener('DOMContentLoaded', () => {
             ctx.textBaseline = 'middle';
             ctx.fillText(textToPrint, -labelWidth / 2 + qrSize + 30, 0 + verticalOffset);
             ctx.restore();
-            
+            console.log(`[PRINTARE PAS 5] Imaginea etichetei a fost desenată pe canvas.`);
+
             const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
             const imagePackets = [];
             const widthInBytes = Math.ceil(canvas.width / 8);
@@ -199,9 +201,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 const dataPayload = Array.from(new Uint8Array([...header, ...lineBytes]));
                 imagePackets.push(createNiimbotPacket(0x85, dataPayload));
             }
+            console.log(`[PRINTARE PAS 6] Imaginea a fost convertită în ${imagePackets.length} pachete de date pentru imprimantă.`);
 
             const delay = ms => new Promise(res => setTimeout(res, ms));
 
+            console.log(`[PRINTARE PAS 7] Se trimit comenzile de configurare către imprimantă...`);
             await sendCommandAndWait(niimbotCharacteristic, createNiimbotPacket(0x21, [3]));
             await sendCommandAndWait(niimbotCharacteristic, createNiimbotPacket(0x23, [1]));
             await sendCommandAndWait(niimbotCharacteristic, createNiimbotPacket(0x01, [1]));
@@ -209,17 +213,22 @@ document.addEventListener('DOMContentLoaded', () => {
             const dimensionData = [(canvas.height >> 8) & 0xFF, canvas.height & 0xFF, (canvas.width >> 8) & 0xFF, canvas.width & 0xFF];
             await sendCommandAndWait(niimbotCharacteristic, createNiimbotPacket(0x13, dimensionData));
             await sendCommandAndWait(niimbotCharacteristic, createNiimbotPacket(0x15, [0, 1]));
+            console.log(`[PRINTARE PAS 7] Comenzile de configurare au fost trimise.`);
 
+            console.log(`[PRINTARE PAS 8] Se trimit pachetele cu imaginea...`);
             for (const packet of imagePackets) {
                 await niimbotCharacteristic.writeValueWithoutResponse(packet);
                 await delay(20);
             }
-
+            console.log(`[PRINTARE PAS 8] Toate pachetele cu imaginea au fost trimise.`);
+            
+            console.log(`[PRINTARE PAS 9] Se trimit comenzile de finalizare a printării...`);
             await sendCommandAndWait(niimbotCharacteristic, createNiimbotPacket(0xE3, [1]));
             await sendCommandAndWait(niimbotCharacteristic, createNiimbotPacket(0xF3, [1])); 
+            console.log(`[PRINTARE PAS 10] PROCES DE PRINTARE FINALIZAT CU SUCCES.`);
 
         } catch (error) {
-            console.error(`Eroare critică la printarea etichetei: ${textToPrint}`, error);
+            console.error(`[PRINTARE EROARE CRITICĂ] A apărut o eroare în timpul procesului de printare pentru eticheta: ${textToPrint}`, error);
             throw error;
         }
     }
@@ -243,12 +252,34 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     async function handleSaveChanges() {
+        console.clear(); // Curățăm consola pentru o nouă sesiune de depanare
+        console.log(`%c[SALVARE PAS 1] Butonul 'Salvează' a fost apăsat.`, 'color: blue; font-weight: bold;');
+        
         const saveButton = document.getElementById('save-btn');
         saveButton.disabled = true;
         saveButton.textContent = 'Se salvează...';
 
         const productAsinForPrinting = currentProduct.asin;
+        
+        console.log(`[SALVARE PAS 2] Verificare date produs curent.`);
+        console.log(`[SALVARE PAS 2] Obiectul 'currentProduct':`, JSON.parse(JSON.stringify(currentProduct)));
+        console.log(`[SALVARE PAS 2] Valoarea extrasă pentru 'productAsinForPrinting':`, productAsinForPrinting);
+        console.log(`[SALVARE PAS 2] Tipul valorii este:`, typeof productAsinForPrinting);
 
+        if (typeof productAsinForPrinting !== 'string' || productAsinForPrinting.trim() === '') {
+            const errorMessage = `EROARE FATALĂ: Imprimarea a fost oprită deoarece produsul curent (ID: ${currentProduct.id}) nu are un cod ASIN valid. Valoare primită: '${productAsinForPrinting}'.`;
+            console.error(errorMessage);
+            alert(errorMessage);
+            
+            saveButton.disabled = false;
+            saveButton.textContent = 'Salvează';
+            return;
+        }
+        console.log(`%c[SALVARE PAS 2] Verificare ASIN trecută cu succes.`, 'color: green;');
+
+        console.log(`[SALVARE PAS 3] Calcularea modificărilor de stoc (delta).`);
+        console.log(`[SALVARE PAS 3] Stocul la deschiderea ferestrei:`, stockStateAtModalOpen);
+        console.log(`[SALVARE PAS 3] Stocul curent din fereastră:`, stockStateInModal);
         const delta = {};
         let hasChanges = false;
         for (const condition in stockStateAtModalOpen) {
@@ -260,49 +291,61 @@ document.addEventListener('DOMContentLoaded', () => {
                 hasChanges = true;
             }
         }
+        console.log(`[SALVARE PAS 3] Delta calculată:`, delta);
 
         if (!hasChanges) {
+            console.log(`[SALVARE PAS 3] Nu au fost detectate modificări. Proces anulat.`);
             hideModal();
             return;
         }
+        console.log(`%c[SALVARE PAS 3] Modificări detectate. Se continuă.`, 'color: green;');
 
+        console.log(`[SALVARE PAS 4] Se trimit modificările către server...`);
         const success = await sendStockUpdate(currentCommandId, productAsinForPrinting, delta);
         
         if (success) {
+            console.log(`%c[SALVARE PAS 4] Modificările au fost salvate cu succes pe server.`, 'color: green;');
+            
+            console.log(`[SALVARE PAS 5] Se actualizează datele locale...`);
             await fetchDataAndSyncState();
             renderPageContent();
+            console.log(`%c[SALVARE PAS 5] Datele locale au fost actualizate.`, 'color: green;');
 
             const conditionMap = { 'new': 'CN', 'very-good': 'FB', 'good': 'B' };
-            const printQueue = [];
+            let itemsAdded = false;
             for (const condition in delta) {
-                if (delta[condition] > 0 && conditionMap[condition]) {
-                    for (let i = 0; i < delta[condition]; i++) {
-                        printQueue.push({ code: productAsinForPrinting, conditionLabel: conditionMap[condition] });
-                    }
+                if (delta[condition] > 0) {
+                    itemsAdded = true;
+                    break;
                 }
             }
+            console.log(`[SALVARE PAS 6] Verificare dacă au fost adăugate produse noi. Rezultat: ${itemsAdded}`);
             
             hideModal();
 
-            // --- START MODIFICARE: PRINTEAZĂ O SINGURĂ ETICHETĂ ---
-            if (printQueue.length > 0) {
-                showToast(`Se pregătește o singură etichetă pentru imprimare...`);
-                
-                const itemToPrint = printQueue[0]; // Luăm doar primul articol din coadă
+            if (itemsAdded) {
+                console.log(`[SALVARE PAS 7] S-au adăugat produse noi. Se inițiază procesul de printare.`);
                 try {
-                    showToast(`Se printează eticheta pentru: ${itemToPrint.code}`);
-                    await printSingleLabel(itemToPrint.code, itemToPrint.conditionLabel);
+                    const firstCondition = Object.keys(delta).find(c => delta[c] > 0 && conditionMap[c]);
+                    console.log(`[SALVARE PAS 7] Prima condiție adăugată pentru etichetă: '${firstCondition}' (cod: '${conditionMap[firstCondition]}')`);
+                    
+                    showToast(`Se printează eticheta pentru: ${productAsinForPrinting}`);
+                    await printSingleLabel(productAsinForPrinting, conditionMap[firstCondition]);
                     showToast(`S-a finalizat imprimarea.`);
+                    console.log(`%c[SALVARE PAS 8] Proces de salvare și printare finalizat cu succes.`, 'color: blue; font-weight: bold;');
+
                 } catch (e) {
-                    // Eroarea este deja gestionată și afișată în funcția printSingleLabel sau aici pentru alte cazuri
-                    console.error("Eroare la imprimare:", e);
-                    // Oprim procesul în caz de eroare
+                    console.error("[SALVARE EROARE] A apărut o eroare în timpul apelului funcției de printare.", e);
+                    showToast(`Eroare la imprimare. Verificați consola.`);
                     return;
                 }
+            } else {
+                console.log(`[SALVARE PAS 7] Nu s-au adăugat produse noi. Nu se printează nimic.`);
+                console.log(`%c[SALVARE PAS 8] Proces de salvare finalizat (fără printare).`, 'color: blue; font-weight: bold;');
             }
-            // --- FINAL MODIFICARE ---
 
         } else {
+            console.error("[SALVARE EROARE] Salvarea pe server a eșuat.");
             alert('Eroare la salvare! Vă rugăm încercați din nou.');
             saveButton.disabled = false;
             saveButton.textContent = 'Salvează';
@@ -380,8 +423,6 @@ document.addEventListener('DOMContentLoaded', () => {
         addModalEventListeners();
         pageElements.stockModal.classList.remove('hidden');
     }
-
-
 
     function hideModal() {
         const modalContent = pageElements.stockModal.querySelector('div');
