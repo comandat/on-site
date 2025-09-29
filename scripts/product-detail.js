@@ -5,7 +5,6 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- START: Variabilele pentru printare și starea aplicației ---
     let niimbotCharacteristic = null;
     let isConnecting = false;
-    // --- AM ELIMINAT 'responseResolver' ---
 
     let currentCommandId = null;
     let currentProductId = null;
@@ -52,12 +51,8 @@ document.addEventListener('DOMContentLoaded', () => {
         return new Uint8Array(packet);
     }
 
-    // --- START MODIFICARE: AM ELIMINAT 'handleCharacteristicValueChanged' ---
-
-    // --- START MODIFICARE: Funcție 'sendCommandAndWait' rescrisă pentru a fi mai robustă ---
     async function sendCommandAndWait(characteristic, packet) {
         return new Promise((resolve, reject) => {
-            // Definim un handler specific pentru răspunsul acestei comenzi
             const specificHandler = (event) => {
                 characteristic.removeEventListener('characteristicvaluechanged', specificHandler);
                 clearTimeout(timeout);
@@ -65,16 +60,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 resolve(value);
             };
 
-            // Adăugăm listener-ul specific
             characteristic.addEventListener('characteristicvaluechanged', specificHandler);
 
-            // Setăm un timeout
             const timeout = setTimeout(() => {
                 characteristic.removeEventListener('characteristicvaluechanged', specificHandler);
                 reject(new Error('Timeout: Imprimanta nu a răspuns în 5 secunde.'));
             }, 5000);
 
-            // Trimitem comanda
             characteristic.writeValueWithoutResponse(packet).catch(err => {
                 characteristic.removeEventListener('characteristicvaluechanged', specificHandler);
                 clearTimeout(timeout);
@@ -82,7 +74,6 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         });
     }
-    // --- FINAL MODIFICARE ---
 
     async function connectToPrinter(statusCallback) {
         if (isPrinterConnected()) {
@@ -125,9 +116,6 @@ document.addEventListener('DOMContentLoaded', () => {
             
             niimbotCharacteristic = foundCharacteristic;
             await niimbotCharacteristic.startNotifications();
-            // --- START MODIFICARE: AM ELIMINAT listener-ul global ---
-            // niimbotCharacteristic.addEventListener('characteristicvaluechanged', handleCharacteristicValueChanged);
-            // --- FINAL MODIFICARE ---
             if (statusCallback) statusCallback(`Conectat la ${device.name}. Gata de imprimare.`);
             
             device.addEventListener('gattserverdisconnected', () => {
@@ -207,21 +195,26 @@ document.addEventListener('DOMContentLoaded', () => {
 
             const delay = ms => new Promise(res => setTimeout(res, ms));
 
-            await sendCommandAndWait(niimbotCharacteristic, createNiimbotPacket(0x21, [3]));
-            await sendCommandAndWait(niimbotCharacteristic, createNiimbotPacket(0x23, [1]));
-            await sendCommandAndWait(niimbotCharacteristic, createNiimbotPacket(0x01, [1]));
-            await sendCommandAndWait(niimbotCharacteristic, createNiimbotPacket(0x03, [1]));
+            // --- START MODIFICARE: Trimitere rapidă a comenzilor de configurare ---
+            const write = (packet) => niimbotCharacteristic.writeValueWithoutResponse(packet);
+            await write(createNiimbotPacket(0x21, [3]));
+            await write(createNiimbotPacket(0x23, [1]));
+            await write(createNiimbotPacket(0x01, [1]));
+            await write(createNiimbotPacket(0x03, [1]));
             const dimensionData = [(canvas.height >> 8) & 0xFF, canvas.height & 0xFF, (canvas.width >> 8) & 0xFF, canvas.width & 0xFF];
-            await sendCommandAndWait(niimbotCharacteristic, createNiimbotPacket(0x13, dimensionData));
-            await sendCommandAndWait(niimbotCharacteristic, createNiimbotPacket(0x15, [0, 1]));
+            await write(createNiimbotPacket(0x13, dimensionData));
+            await write(createNiimbotPacket(0x15, [0, 1]));
+            // --- FINAL MODIFICARE ---
 
             for (const packet of imagePackets) {
                 await niimbotCharacteristic.writeValueWithoutResponse(packet);
-                await delay(20);
+                await delay(20); // Păstrăm o mică pauză pentru a nu suprasolicita buffer-ul imprimantei
             }
 
-            await sendCommandAndWait(niimbotCharacteristic, createNiimbotPacket(0xE3, [1]));
-            await sendCommandAndWait(niimbotCharacteristic, createNiimbotPacket(0xF3, [1])); 
+            // --- START MODIFICARE: Așteptăm confirmarea doar la finalul printării ---
+            await write(createNiimbotPacket(0xE3, [1]));
+            await sendCommandAndWait(niimbotCharacteristic, createNiimbotPacket(0xF3, [1])); // Singura comandă care așteaptă răspuns
+            // --- FINAL MODIFICARE ---
 
         } catch (error) {
             console.error(`Eroare critică la printarea etichetei: ${textToPrint}`, error);
@@ -310,7 +303,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     try {
                         showToast(`Se printează ${i + 1}/${printQueue.length}: ${item.code}`);
                         await printSingleLabel(item.code, item.conditionLabel);
-                        await new Promise(res => setTimeout(res, 800));
+                        // Pauza nu mai este la fel de critică, dar o păstrăm ca extra siguranță
+                        await new Promise(res => setTimeout(res, 400));
                     } catch (e) {
                         showToast(`Eroare la eticheta ${i + 1}. Procesul s-a oprit.`);
                         console.error("Eroare la imprimare:", e);
