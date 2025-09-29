@@ -1,13 +1,8 @@
 // scripts/printer-service.js
 
-// Acest modul gestionează conexiunea și comunicarea cu imprimanta Niimbot.
-// Poate fi importat de pe orice pagină pentru a printa sau a verifica starea conexiunii.
-
 let niimbotCharacteristic = null;
 let isConnecting = false;
 let responseResolver = null;
-
-// --- Funcții de comunicare Bluetooth Low Energy (BLE) ---
 
 function createNiimbotPacket(type, data) {
     const dataBytes = Array.isArray(data) ? data : [data];
@@ -40,8 +35,6 @@ async function sendCommandAndWait(characteristic, packet) {
         });
     });
 }
-
-// --- Funcții exportate pentru managementul conexiunii și printare ---
 
 export function isPrinterConnected() {
     return niimbotCharacteristic !== null;
@@ -97,7 +90,6 @@ export async function connectToPrinter(statusCallback) {
         
         if (statusCallback) statusCallback(`Conectat la ${device.name}. Gata de imprimare.`);
         
-        // Listener pentru deconectare
         device.addEventListener('gattserverdisconnected', () => {
             if (statusCallback) statusCallback('Imprimanta a fost deconectată.');
             niimbotCharacteristic = null;
@@ -114,7 +106,8 @@ export async function connectToPrinter(statusCallback) {
     }
 }
 
-async function printSingleLabel(productCode, conditionLabel, statusCallback) {
+// --- MODIFICARE: Am păstrat doar funcția de printare singulară ---
+export async function printSingleLabel(productCode, conditionLabel) {
     if (!isPrinterConnected()) {
         throw new Error("Imprimanta nu este conectată.");
     }
@@ -122,11 +115,8 @@ async function printSingleLabel(productCode, conditionLabel, statusCallback) {
     const textToPrint = `${productCode}${conditionLabel}`;
 
     try {
-        if (statusCallback) statusCallback(`Se pregătește eticheta: ${textToPrint}...`);
-
         const labelWidth = 240;
         const labelHeight = 120;
-
         const canvas = document.createElement('canvas');
         canvas.width = labelHeight;
         canvas.height = labelWidth;
@@ -137,8 +127,12 @@ async function printSingleLabel(productCode, conditionLabel, statusCallback) {
         ctx.save();
         ctx.translate(canvas.width / 2, canvas.height / 2);
         ctx.rotate(90 * Math.PI / 180);
-
         const verticalOffset = 10;
+        
+        // Asigură că funcția `qrcode` este disponibilă
+        if (typeof qrcode === 'undefined') {
+            throw new Error('Biblioteca qrcode.js nu este încărcată.');
+        }
         
         const qr = qrcode(0, 'M');
         qr.addData(textToPrint);
@@ -146,10 +140,9 @@ async function printSingleLabel(productCode, conditionLabel, statusCallback) {
         const qrImg = new Image();
         qrImg.src = qr.createDataURL(6, 2);
         await new Promise(resolve => { qrImg.onload = resolve; });
-
+        
         const qrSize = 85; 
         ctx.drawImage(qrImg, -labelWidth / 2 + 15, -labelHeight / 2 + 18 + verticalOffset, qrSize, qrSize);
-
         ctx.fillStyle = 'white';
         ctx.font = 'bold 30px Arial'; 
         ctx.textAlign = 'left';
@@ -177,7 +170,6 @@ async function printSingleLabel(productCode, conditionLabel, statusCallback) {
 
         const delay = ms => new Promise(res => setTimeout(res, ms));
 
-        if (statusCallback) statusCallback('Se trimit comenzile...');
         await sendCommandAndWait(niimbotCharacteristic, createNiimbotPacket(0x21, [3]));
         await sendCommandAndWait(niimbotCharacteristic, createNiimbotPacket(0x23, [1]));
         await sendCommandAndWait(niimbotCharacteristic, createNiimbotPacket(0x01, [1]));
@@ -186,7 +178,6 @@ async function printSingleLabel(productCode, conditionLabel, statusCallback) {
         await sendCommandAndWait(niimbotCharacteristic, createNiimbotPacket(0x13, dimensionData));
         await sendCommandAndWait(niimbotCharacteristic, createNiimbotPacket(0x15, [0, 1]));
 
-        if (statusCallback) statusCallback('Se transferă datele etichetei...');
         for (const packet of imagePackets) {
             await niimbotCharacteristic.writeValueWithoutResponse(packet);
             await delay(20);
@@ -195,32 +186,8 @@ async function printSingleLabel(productCode, conditionLabel, statusCallback) {
         await sendCommandAndWait(niimbotCharacteristic, createNiimbotPacket(0xE3, [1]));
         await sendCommandAndWait(niimbotCharacteristic, createNiimbotPacket(0xF3, [1])); 
 
-        if (statusCallback) statusCallback(`Eticheta "${textToPrint}" a fost trimisă.`);
     } catch (error) {
-        if (statusCallback) statusCallback(`Eroare la imprimarea etichetei: ${textToPrint} - ${error.message}`);
+        console.error(`Eroare critică la printarea etichetei: ${textToPrint}`, error);
         throw error;
     }
-}
-
-export async function printLabelQueue(queue, statusCallback) {
-    if (!queue || queue.length === 0) {
-        if (statusCallback) statusCallback('Nu sunt etichete de imprimat.');
-        return;
-    }
-    
-    if (statusCallback) statusCallback(`Se inițiază imprimarea pentru ${queue.length} etichete...`);
-    
-    for (let i = 0; i < queue.length; i++) {
-        const { code, conditionLabel } = queue[i];
-        try {
-            if (statusCallback) statusCallback(`Se printează ${i + 1} din ${queue.length}: ${code}${conditionLabel}`);
-            await printSingleLabel(code, conditionLabel, null); // Nu pasam statusCallback la functia individuala
-            await new Promise(res => setTimeout(res, 500)); 
-        } catch (e) {
-            console.error("Eroare la imprimarea etichetei:", e);
-             if (statusCallback) statusCallback(`Eroare la eticheta ${i + 1}. Procesul s-a oprit.`);
-            return;
-        }
-    }
-    if (statusCallback) statusCallback(`S-a finalizat imprimarea celor ${queue.length} etichete.`);
 }
