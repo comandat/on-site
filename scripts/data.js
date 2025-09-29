@@ -23,6 +23,12 @@ export async function fetchDataAndSyncState() {
         if (!response.ok) throw new Error('Network error during data fetch');
         
         const responseData = await response.json();
+        
+        // =================================================================
+        // AICI ESTE MODIFICAREA: AFIȘEAZĂ RĂSPUNSUL BRUT ÎN CONSOLĂ
+        console.log("RAW DATA RECEIVED FROM SERVER:", JSON.stringify(responseData.data, null, 2));
+        // =================================================================
+
         if (responseData.status !== 'success' || !responseData.data) throw new Error('Invalid data from server');
 
         const commands = Object.keys(responseData.data).map(commandId => {
@@ -39,8 +45,8 @@ export async function fetchDataAndSyncState() {
                     };
                     const found = Object.values(state).reduce((sum, val) => Number(sum) + Number(val), 0);
                     return {
-                        id: p.productsku, // ID intern al aplicației
-                        asin: p.asin,     // Cheia primară pentru baza de date
+                        id: p.productsku,
+                        asin: p.asin,
                         expected: p.orderedquantity || 0,
                         found: found,
                         state: state,
@@ -58,7 +64,6 @@ export async function fetchDataAndSyncState() {
     }
 }
 
-// AICI ESTE CORECTURA PRINCIPALĂ
 export async function sendStockUpdate(commandId, productAsin, stockDelta) {
     const changes = [];
     for (const condition in stockDelta) {
@@ -73,10 +78,9 @@ export async function sendStockUpdate(commandId, productAsin, stockDelta) {
 
     if (changes.length === 0) return true;
 
-    // Payload-ul trimis la n8n folosește acum cheia "asin"
     const payload = {
         orderId: commandId,
-        asin: productAsin, // Am schimbat "productAsin" în "asin"
+        asin: productAsin,
         changes: changes
     };
 
