@@ -7,10 +7,9 @@ document.addEventListener('DOMContentLoaded', () => {
     let currentProduct = null;
     let swiper = null;
 
+    // Stări pentru a gestiona corect modificările în modal
     let stockStateAtModalOpen = {};
     let stockStateInModal = {};
-    
-    // Variabilă pentru a gestiona apăsarea lungă
     let pressTimer = null;
 
     const pageElements = {
@@ -22,30 +21,43 @@ document.addEventListener('DOMContentLoaded', () => {
         stockModal: document.getElementById('stock-modal'),
         openModalButton: document.getElementById('open-stock-modal-button')
     };
-    
-    function renderStockLevels() {
+
+    // Funcție centrală pentru a obține cele mai noi date despre produs
+    function getLatestProductData() {
         const command = AppState.getCommands().find(c => c.id === currentCommandId);
-        currentProduct = command ? command.products.find(p => p.id === currentProductId) : null;
+        return command ? command.products.find(p => p.id === currentProductId) : null;
+    }
+
+    // Funcție centrală pentru a actualiza vizual informațiile pe pagină
+    function renderPageContent() {
+        currentProduct = getLatestProductData();
         if (!currentProduct) return;
 
         pageElements.expectedStock.textContent = currentProduct.expected;
         pageElements.suggestedCondition.textContent = currentProduct.suggestedcondition;
         pageElements.totalFound.textContent = currentProduct.found;
+
         for (const condition in currentProduct.state) {
-            document.querySelector(`[data-summary="${condition}"]`).textContent = currentProduct.state[condition];
+            const element = document.querySelector(`[data-summary="${condition}"]`);
+            if (element) {
+                element.textContent = currentProduct.state[condition];
+            }
         }
     }
 
     async function handleSaveChanges() {
-        // ... (această funcție rămâne neschimbată)
         const saveButton = document.getElementById('save-btn');
         saveButton.disabled = true;
         saveButton.textContent = 'Se salvează...';
 
         const delta = {};
         let hasChanges = false;
+        // Se calculează delta corect, asigurând că valorile sunt numere
         for (const condition in stockStateAtModalOpen) {
-            const difference = stockStateInModal[condition] - stockStateAtModalOpen[condition];
+            const before = stockStateAtModalOpen[condition] || 0;
+            const after = stockStateInModal[condition] || 0;
+            const difference = after - before;
+
             if (difference !== 0) {
                 delta[condition] = difference;
                 hasChanges = true;
@@ -56,24 +68,22 @@ document.addEventListener('DOMContentLoaded', () => {
             hideModal();
             return;
         }
-        
+
         const success = await sendStockUpdate(currentCommandId, currentProductId, delta);
         hideModal();
 
         if (success) {
             await fetchDataAndSyncState();
-            renderStockLevels();
+            renderPageContent();
         } else {
             alert('Eroare la salvare! Vă rugăm încercați din nou.');
         }
     }
 
     function showModal() {
-        // ... (această funcție rămâne neschimbată)
-        const command = AppState.getCommands().find(c => c.id === currentCommandId);
-        currentProduct = command ? command.products.find(p => p.id === currentProductId) : null;
-        if(!currentProduct) return;
-        
+        currentProduct = getLatestProductData();
+        if (!currentProduct) return;
+
         stockStateAtModalOpen = { ...currentProduct.state };
         stockStateInModal = { ...currentProduct.state };
 
@@ -97,88 +107,80 @@ document.addEventListener('DOMContentLoaded', () => {
         const modalContent = pageElements.stockModal.querySelector('div');
         if (modalContent) {
             modalContent.classList.replace('animate-slide-down', 'animate-slide-up');
-            setTimeout(() => pageElements.stockModal.classList.add('hidden'), 300);
+            setTimeout(() => {
+                pageElements.stockModal.classList.add('hidden');
+                pageElements.stockModal.innerHTML = '';
+            }, 300);
         }
     }
 
     function createCounter(id, label, value, isDanger = false) {
-        // Am înlocuit span-ul cu un input de tip number
         return `
             <div class="flex items-center justify-between py-3 border-b">
                 <span class="text-lg font-medium ${isDanger ? 'text-red-600' : 'text-gray-800'}">${label}</span>
                 <div class="flex items-center gap-3">
                     <button data-action="minus" data-target="${id}" class="control-btn rounded-full bg-gray-200 w-8 h-8 flex items-center justify-center text-lg font-bold select-none">-</button>
-                    <input type="number" id="count-${id}" value="${value}" class="text-xl font-bold w-16 text-center border-gray-300 rounded-md shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50">
+                    <input type="number" id="count-${id}" value="${value}" class="text-xl font-bold w-16 text-center border-gray-300 rounded-md shadow-sm">
                     <button data-action="plus" data-target="${id}" class="control-btn rounded-full bg-gray-200 w-8 h-8 flex items-center justify-center text-lg font-bold select-none">+</button>
                 </div>
             </div>`;
     }
-    
-    // Funcție pentru a actualiza valoarea în UI și în starea internă
+
     function updateValue(target, newValue) {
-        newValue = Math.max(0, parseInt(newValue, 10) || 0); // Asigură-te că valoarea e un număr pozitiv
-        stockStateInModal[target] = newValue;
-        document.getElementById(`count-${target}`).value = newValue;
+        // Sanitizează valoarea pentru a fi mereu un număr întreg pozitiv
+        const cleanValue = Math.max(0, parseInt(newValue, 10) || 0);
+        stockStateInModal[target] = cleanValue;
+        document.getElementById(`count-${target}`).value = cleanValue;
     }
 
     function addModalEventListeners() {
-        // Logica pentru click pe butoane
         pageElements.stockModal.querySelectorAll('.control-btn').forEach(button => {
             const action = button.dataset.action;
             const target = button.dataset.target;
             
-            const startPress = (e) => {
-                e.preventDefault(); // Previne comportamente nedorite (ex: selectare text)
-                
-                // Setează un timer care se va declanșa după 3 secunde
-                pressTimer = setTimeout(() => {
-                    if (action === 'minus') {
-                        updateValue(target, 0);
-                    } else if (action === 'plus') {
-                        updateValue(target, currentProduct.expected);
-                    }
-                }, 3000); // 3000 milisecunde = 3 secunde
-            };
-            
-            const endPress = (e) => {
-                e.preventDefault();
-                // Anulează timer-ul dacă butonul este eliberat înainte de 3 secunde
-                clearTimeout(pressTimer);
-            };
-            
-            const shortClick = (e) => {
-                 e.preventDefault();
-                // Execută un click normal dacă a fost o apăsare scurtă
+            // Simulează un click simplu
+            const shortClick = () => {
+                const currentValue = stockStateInModal[target] || 0;
                 if (action === 'plus') {
-                    updateValue(target, stockStateInModal[target] + 1);
-                } else if (action === 'minus') {
-                    updateValue(target, stockStateInModal[target] - 1);
+                    updateValue(target, currentValue + 1);
+                } else {
+                    updateValue(target, currentValue - 1);
                 }
             };
+            
+            // Logica pentru apăsare
+            const startPress = (e) => {
+                e.preventDefault();
+                pressTimer = setTimeout(() => {
+                    if (action === 'minus') updateValue(target, 0);
+                    else if (action === 'plus') updateValue(target, currentProduct.expected);
+                }, 3000); // 3 secunde
+            };
 
-            // Adaugă event listener-e pentru mouse și touch
+            const endPress = () => {
+                clearTimeout(pressTimer);
+            };
+
             button.addEventListener('mousedown', startPress);
             button.addEventListener('mouseup', endPress);
             button.addEventListener('mouseleave', endPress);
-            button.addEventListener('touchstart', startPress);
+            button.addEventListener('touchstart', startPress, { passive: false });
             button.addEventListener('touchend', endPress);
             button.addEventListener('click', shortClick);
         });
-        
-        // Logica pentru modificarea manuală a input-ului
+
         pageElements.stockModal.querySelectorAll('input[type="number"]').forEach(input => {
             input.addEventListener('input', () => {
                 const target = input.id.replace('count-', '');
                 updateValue(target, input.value);
             });
         });
-        
+
         pageElements.stockModal.querySelector('#save-btn').addEventListener('click', handleSaveChanges);
         pageElements.stockModal.querySelector('#close-modal-btn').addEventListener('click', hideModal);
     }
-    
+
     async function initializePage() {
-        // ... (restul funcției rămâne neschimbată)
         currentCommandId = sessionStorage.getItem('currentCommandId');
         currentProductId = sessionStorage.getItem('currentProductId');
         if (!currentCommandId || !currentProductId) {
@@ -187,18 +189,15 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         await fetchDataAndSyncState();
-        
-        const command = AppState.getCommands().find(c => c.id === currentCommandId);
-        currentProduct = command ? command.products.find(p => p.id === currentProductId) : null;
-       
+        currentProduct = getLatestProductData();
         if (!currentProduct) {
             alert('Produsul nu a fost gasit');
             window.location.href = 'products.html';
             return;
         }
 
-        renderStockLevels();
-        
+        renderPageContent();
+
         const details = await fetchProductDetailsInBulk([currentProduct.asin]);
         const productDetails = details[currentProduct.asin];
         pageElements.title.textContent = productDetails?.title || 'Nume indisponibil';
@@ -214,8 +213,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 pageElements.imageWrapper.appendChild(slide);
             });
         }
-        if (swiper) swiper.update();
-        else swiper = new Swiper('#image-swiper-container', { pagination: { el: '.swiper-pagination' } });
+        if (swiper) { 
+            swiper.update();
+        } else {
+            swiper = new Swiper('#image-swiper-container', { pagination: { el: '.swiper-pagination' } });
+        }
         
         pageElements.openModalButton.addEventListener('click', showModal);
     }
