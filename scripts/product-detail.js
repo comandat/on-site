@@ -40,7 +40,7 @@ document.addEventListener('DOMContentLoaded', () => {
         return niimbotCharacteristic !== null;
     }
 
-    function createNiimbotPacket(type, data) {
+    function createNiimbotPacket(type, data = []) {
         const dataBytes = Array.isArray(data) ? data : [data];
         const checksum = (dataBytes.reduce((acc, byte) => acc ^ byte, type ^ dataBytes.length)) & 0xFF;
         const packet = [0x55, 0x55, type, dataBytes.length, ...dataBytes, checksum, 0xAA, 0xAA];
@@ -74,8 +74,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 // FOLOSIM COMANDA CORECTĂ PENTRU STAREA PRINTĂRII: 0xD3
                 const statusPacket = createNiimbotPacket(0xD3, [1]);
                 const response = await sendCommandAndWait(niimbotCharacteristic, statusPacket, 500);
-                // Răspunsul pentru "liber" este o secvență specifică
-                if (response && response.length > 3 && response[3] === 2 && response[4] === 0) {
+                // Răspunsul pentru "liber" este o secvență specifică (al 4-lea byte = 2, al 5-lea = 0)
+                if (response && response.length > 4 && response[3] === 2 && response[4] === 0) {
                     return; // Imprimanta este liberă
                 }
             } catch (e) {
@@ -187,23 +187,25 @@ document.addEventListener('DOMContentLoaded', () => {
                         lineBytes[Math.floor(x / 8)] |= (1 << (7 - (x % 8)));
                     }
                 }
-                imagePackets.push(new Uint8Array([0x85, 0x01, (y >> 8) & 0xFF, y & 0xFF, widthInBytes, 0, ...lineBytes]));
+                // Refactorizat pentru a se alinia cu modul în care niimbluelib construiește pachetele de imagine
+                const header = [0x85, 0x01, (y >> 8) & 0xFF, y & 0xFF, widthInBytes, 0];
+                const fullPacket = new Uint8Array([...header, ...lineBytes]);
+                imagePackets.push(fullPacket);
             }
 
             const write = (packet) => niimbotCharacteristic.writeValueWithoutResponse(packet);
             
-            // FOLOSIM COMENZILE CORECTE DE START, LA FEL CA NIIMBLUELIB
+            // FOLOSIM SECVENȚA DE COMENZI CORECTĂ
             await write(createNiimbotPacket(0x1A, [2])); // SetLabelType
             await write(createNiimbotPacket(0x1B, [3])); // SetLabelDensity
-            await write(createNiimbotPacket(0xB0)); // StartPagePrint
+            await write(createNiimbotPacket(0xB0));      // StartPagePrint
 
             for (const packet of imagePackets) {
                 await write(packet);
             }
 
-            // FOLOSIM COMENZILE CORECTE DE FINALIZARE
-            await write(createNiimbotPacket(0xB1)); // EndPagePrint
-            await sendCommandAndWait(niimbotCharacteristic, createNiimbotPacket(0xB3)); // EndPrint
+            await write(createNiimbotPacket(0xB1));      // EndPagePrint
+            await sendCommandAndWait(niimbotCharacteristic, createNiimbotPacket(0xB3)); // EndPrint (Așteaptă confirmare)
         } catch (error) {
             console.error(`Eroare critică la printarea etichetei: ${textToPrint}`, error);
             throw error;
