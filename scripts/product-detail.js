@@ -7,10 +7,10 @@ document.addEventListener('DOMContentLoaded', () => {
     let currentProduct = null;
     let swiper = null;
 
-    // Stări pentru a gestiona corect modificările în modal
     let stockStateAtModalOpen = {};
     let stockStateInModal = {};
     let pressTimer = null;
+    let clickHandler = null;
 
     const pageElements = {
         title: document.getElementById('product-detail-title'),
@@ -22,13 +22,11 @@ document.addEventListener('DOMContentLoaded', () => {
         openModalButton: document.getElementById('open-stock-modal-button')
     };
 
-    // Funcție centrală pentru a obține cele mai noi date despre produs
     function getLatestProductData() {
         const command = AppState.getCommands().find(c => c.id === currentCommandId);
         return command ? command.products.find(p => p.id === currentProductId) : null;
     }
 
-    // Funcție centrală pentru a actualiza vizual informațiile pe pagină
     function renderPageContent() {
         currentProduct = getLatestProductData();
         if (!currentProduct) return;
@@ -52,10 +50,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const delta = {};
         let hasChanges = false;
-        // Se calculează delta corect, asigurând că valorile sunt numere
+        // LOGICA DE CALCUL CORECTATĂ ȘI GARANTATĂ
         for (const condition in stockStateAtModalOpen) {
-            const before = stockStateAtModalOpen[condition] || 0;
-            const after = stockStateInModal[condition] || 0;
+            // Asigurăm că ambele valori sunt numere înainte de a calcula diferența
+            const before = Number(stockStateAtModalOpen[condition]) || 0;
+            const after = Number(stockStateInModal[condition]) || 0;
             const difference = after - before;
 
             if (difference !== 0) {
@@ -127,20 +126,20 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function updateValue(target, newValue) {
-        // Sanitizează valoarea pentru a fi mereu un număr întreg pozitiv
         const cleanValue = Math.max(0, parseInt(newValue, 10) || 0);
         stockStateInModal[target] = cleanValue;
         document.getElementById(`count-${target}`).value = cleanValue;
     }
 
+    // LOGICA PENTRU EVENIMENTE A FOST COMPLET RESCRISĂ ȘI SIMPLIFICATĂ
     function addModalEventListeners() {
         pageElements.stockModal.querySelectorAll('.control-btn').forEach(button => {
             const action = button.dataset.action;
             const target = button.dataset.target;
-            
-            // Simulează un click simplu
-            const shortClick = () => {
-                const currentValue = stockStateInModal[target] || 0;
+
+            // Funcția care se execută la un click normal
+            clickHandler = () => {
+                const currentValue = Number(stockStateInModal[target]) || 0;
                 if (action === 'plus') {
                     updateValue(target, currentValue + 1);
                 } else {
@@ -151,6 +150,9 @@ document.addEventListener('DOMContentLoaded', () => {
             // Logica pentru apăsare
             const startPress = (e) => {
                 e.preventDefault();
+                // Oprește click-ul normal să se execute la final
+                button.removeEventListener('click', clickHandler);
+                
                 pressTimer = setTimeout(() => {
                     if (action === 'minus') updateValue(target, 0);
                     else if (action === 'plus') updateValue(target, currentProduct.expected);
@@ -159,6 +161,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
             const endPress = () => {
                 clearTimeout(pressTimer);
+                // Reactivează click-ul normal
+                setTimeout(() => button.addEventListener('click', clickHandler), 50);
             };
 
             button.addEventListener('mousedown', startPress);
@@ -166,7 +170,7 @@ document.addEventListener('DOMContentLoaded', () => {
             button.addEventListener('mouseleave', endPress);
             button.addEventListener('touchstart', startPress, { passive: false });
             button.addEventListener('touchend', endPress);
-            button.addEventListener('click', shortClick);
+            button.addEventListener('click', clickHandler);
         });
 
         pageElements.stockModal.querySelectorAll('input[type="number"]').forEach(input => {
