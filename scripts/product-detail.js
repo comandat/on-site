@@ -31,7 +31,6 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     function showToast(message, duration = 3000) {
-        // ... (codul rămâne neschimbat)
         const toast = document.createElement('div');
         toast.textContent = message;
         toast.className = 'fixed bottom-5 left-1/2 -translate-x-1/2 bg-gray-800 text-white px-4 py-2 rounded-lg shadow-lg z-50';
@@ -41,7 +40,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }, duration);
     }
     
-    // --- START: Toată logica de printare, mutată aici ---
+    // --- START: Toată logica de printare, identică cu scriptul original ---
     function isPrinterConnected() {
         return niimbotCharacteristic !== null;
     }
@@ -215,15 +214,12 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     // --- FINAL: Logica de printare ---
 
-
     function getLatestProductData() {
-        // ... (codul rămâne neschimbat)
         const command = AppState.getCommands().find(c => c.id === currentCommandId);
         return command ? command.products.find(p => p.id === currentProductId) : null;
     }
 
     function renderPageContent() {
-        // ... (codul rămâne neschimbat)
         currentProduct = getLatestProductData();
         if (!currentProduct) return;
         pageElements.expectedStock.textContent = currentProduct.expected;
@@ -236,7 +232,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     async function handleSaveChanges() {
-        // ... (logica de aici este identică cu versiunea anterioară, apelând bucla de printare)
         const saveButton = document.getElementById('save-btn');
         saveButton.disabled = true;
         saveButton.textContent = 'Se salvează...';
@@ -303,7 +298,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     
     function showPrinterModal() {
-        // ... (codul rămâne neschimbat)
         pageElements.printerModal.classList.remove('hidden');
         pageElements.printerModal.innerHTML = `
             <div class="absolute bottom-0 w-full max-w-md mx-auto left-0 right-0 bg-white rounded-t-2xl shadow-lg p-4 animate-slide-down">
@@ -344,7 +338,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function hidePrinterModal() {
-        // ... (codul rămâne neschimbat)
         const modalContent = pageElements.printerModal.querySelector('div');
         if (modalContent) {
             modalContent.classList.replace('animate-slide-down', 'animate-slide-up');
@@ -356,7 +349,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function showModal() {
-        // ... (codul rămâne neschimbat)
         currentProduct = getLatestProductData();
         if (!currentProduct) return;
         stockStateAtModalOpen = { ...currentProduct.state };
@@ -378,7 +370,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function hideModal() {
-        // ... (codul rămâne neschimbat)
         const modalContent = pageElements.stockModal.querySelector('div');
         if (modalContent) {
             modalContent.classList.replace('animate-slide-down', 'animate-slide-up');
@@ -390,7 +381,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function createCounter(id, label, value, isDanger = false) {
-        // ... (codul rămâne neschimbat)
         return `
             <div class="flex items-center justify-between py-3 border-b">
                 <span class="text-lg font-medium ${isDanger ? 'text-red-600' : 'text-gray-800'}">${label}</span>
@@ -403,14 +393,12 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function updateValue(target, newValue) {
-        // ... (codul rămâne neschimbat)
         const cleanValue = Math.max(0, parseInt(newValue, 10) || 0);
         stockStateInModal[target] = cleanValue;
         document.getElementById(`count-${target}`).value = cleanValue;
     }
 
     function addModalEventListeners() {
-        // ... (codul rămâne neschimbat)
         pageElements.stockModal.querySelectorAll('.control-btn').forEach(button => {
             const action = button.dataset.action;
             const target = button.dataset.target;
@@ -449,7 +437,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     async function initializePage() {
-        // ... (codul rămâne neschimbat)
         currentCommandId = sessionStorage.getItem('currentCommandId');
         currentProductId = sessionStorage.getItem('currentProductId');
         if (!currentCommandId || !currentProductId) {
