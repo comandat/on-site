@@ -4,6 +4,7 @@ import { AppState, fetchDataAndSyncState, sendStockUpdate, fetchProductDetailsIn
 document.addEventListener('DOMContentLoaded', () => {
     let niimbotCharacteristic = null;
     let isConnecting = false;
+    let printerDevice = null;
     let currentCommandId = null;
     let currentProductId = null;
     let currentProduct = null;
@@ -12,8 +13,6 @@ document.addEventListener('DOMContentLoaded', () => {
     let stockStateInModal = {};
     let pressTimer = null;
     let clickHandler = null;
-    // Definim variabila globală pentru dispozitiv
-    let printerDevice = null; 
 
     const pageElements = {
         title: document.getElementById('product-detail-title'),
@@ -47,8 +46,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const packet = [0x55, 0x55, type, dataBytes.length, ...dataBytes, checksum, 0xAA, 0xAA];
         return new Uint8Array(packet);
     }
-    
-    // Funcție de conectare la un dispozitiv specific
+
     async function connectToDevice(device, statusCallback) {
         if (isConnecting) return false;
         isConnecting = true;
@@ -75,7 +73,7 @@ document.addEventListener('DOMContentLoaded', () => {
             niimbotCharacteristic = foundCharacteristic;
             await niimbotCharacteristic.startNotifications();
             
-            printerDevice = device; // Salvăm dispozitivul conectat
+            printerDevice = device;
 
             device.addEventListener('gattserverdisconnected', () => {
                 showToast('Imprimanta a fost deconectată.');
@@ -94,8 +92,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-
-    // Funcția care deschide fereastra de selecție
     async function discoverAndConnect(statusCallback) {
         try {
             if (statusCallback) statusCallback('Se caută imprimante...');
@@ -320,7 +316,6 @@ document.addEventListener('DOMContentLoaded', () => {
         connectBtn.addEventListener('click', async () => {
             connectBtn.disabled = true;
             connectBtn.textContent = 'Se conectează...';
-            // Folosim noua funcție pentru descoperire
             await discoverAndConnect(statusCallback);
             connectBtn.disabled = false;
             connectBtn.textContent = 'Caută Imprimantă';
@@ -474,21 +469,22 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     
     async function autoConnectToPrinter() {
-        try {
-            const devices = await navigator.bluetooth.getDevices();
-            if (devices.length > 0) {
-                // Ne conectăm la primul dispozitiv pe care l-a aprobat utilizatorul
-                const device = devices[0];
-                showToast(`Se reconectează la ${device.name}...`);
-                const success = await connectToDevice(device, (message) => console.log(message));
-                if (success) {
-                    showToast("Imprimanta a fost reconectată automat.");
-                } else {
-                    showToast("Reconectarea automată a eșuat.", 4000);
+        if (navigator.bluetooth && typeof navigator.bluetooth.getDevices === 'function') {
+            try {
+                const devices = await navigator.bluetooth.getDevices();
+                if (devices.length > 0) {
+                    const device = devices[0];
+                    showToast(`Se reconectează la ${device.name}...`);
+                    const success = await connectToDevice(device, (message) => console.log(message));
+                    if (success) {
+                        showToast("Imprimanta a fost reconectată automat.");
+                    } else {
+                        showToast("Reconectarea automată a eșuat.", 4000);
+                    }
                 }
+            } catch(error) {
+                console.error("Eroare la reconectarea automată:", error);
             }
-        } catch(error) {
-            console.error("Eroare la obținerea dispozitivelor:", error);
         }
     }
 
