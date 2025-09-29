@@ -47,7 +47,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function createNiimbotPacket(type, data) {
         const dataBytes = Array.isArray(data) ? data : [data];
-        const checksum = dataBytes.reduce((acc, byte) => acc ^ byte, type ^ dataBytes.length);
+        // Corecția este aici: ne asigurăm că suma de control este un singur byte folosind `& 0xFF`
+        const checksum = (dataBytes.reduce((acc, byte) => acc ^ byte, type ^ dataBytes.length)) & 0xFF;
         const packet = [0x55, 0x55, type, dataBytes.length, ...dataBytes, checksum, 0xAA, 0xAA];
         return new Uint8Array(packet);
     }
@@ -482,3 +483,4 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     initializePage();
 });
+
