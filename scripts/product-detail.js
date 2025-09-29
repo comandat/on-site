@@ -12,6 +12,8 @@ document.addEventListener('DOMContentLoaded', () => {
     let stockStateInModal = {};
     let pressTimer = null;
     let clickHandler = null;
+    // Definim variabila globală pentru dispozitiv
+    let printerDevice = null; 
 
     const pageElements = {
         title: document.getElementById('product-detail-title'),
@@ -36,7 +38,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     
     function isPrinterConnected() {
-        return niimbotCharacteristic !== null;
+        return niimbotCharacteristic !== null && printerDevice && printerDevice.gatt.connected;
     }
 
     function createNiimbotPacket(type, data = []) {
@@ -45,32 +47,13 @@ document.addEventListener('DOMContentLoaded', () => {
         const packet = [0x55, 0x55, type, dataBytes.length, ...dataBytes, checksum, 0xAA, 0xAA];
         return new Uint8Array(packet);
     }
-
-    async function connectToPrinter(statusCallback, isAutoConnect = false) {
-        if (isPrinterConnected()) {
-            if (statusCallback) statusCallback("Deja conectat.");
-            return true;
-        }
-        if (isConnecting) {
-            if (statusCallback) statusCallback("Conectarea este deja în progres...");
-            return false;
-        }
+    
+    // Funcție de conectare la un dispozitiv specific
+    async function connectToDevice(device, statusCallback) {
+        if (isConnecting) return false;
         isConnecting = true;
-        
+
         try {
-            let device;
-            if (window.savedPrinterDevice) {
-                device = window.savedPrinterDevice;
-                if (statusCallback) statusCallback(`Se încearcă reconectarea la ${device.name}...`);
-            } else {
-                if (statusCallback) statusCallback('Se caută imprimante...');
-                device = await navigator.bluetooth.requestDevice({
-                    filters: [{ namePrefix: 'D' }],
-                    optionalServices: ['e7810a71-73ae-499d-8c15-faa9aef0c3f2', '49535343-fe7d-4ae5-8fa9-9fafd205e455']
-                });
-                window.savedPrinterDevice = device;
-            }
-            
             if (statusCallback) statusCallback(`Conectare la ${device.name}...`);
             const server = await device.gatt.connect();
             
@@ -86,29 +69,43 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
                 if (foundCharacteristic) break;
             }
-            if (!foundCharacteristic) throw new Error('Nu am găsit o caracteristică potrivită.');
+
+            if (!foundCharacteristic) throw new Error('Caracteristica necesară nu a fost găsită.');
             
             niimbotCharacteristic = foundCharacteristic;
             await niimbotCharacteristic.startNotifications();
             
-            if (statusCallback) statusCallback(`Conectat la ${device.name}.`);
-            
+            printerDevice = device; // Salvăm dispozitivul conectat
+
             device.addEventListener('gattserverdisconnected', () => {
                 showToast('Imprimanta a fost deconectată.');
                 niimbotCharacteristic = null;
+                printerDevice = null;
             });
+
+            if (statusCallback) statusCallback(`Conectat la ${device.name}.`);
             isConnecting = false;
             return true;
 
         } catch (error) {
-            if (isAutoConnect && error.name === 'NotFoundError') {
-                 if (statusCallback) statusCallback("Imprimanta salvată nu a fost găsită. Vă rugăm să o selectați manual.");
-                 window.savedPrinterDevice = null;
-            } else {
-                if (statusCallback) statusCallback(`Eroare: ${error.message}`);
-            }
-            niimbotCharacteristic = null;
+            if (statusCallback) statusCallback(`Eroare la conectare: ${error.message}`);
             isConnecting = false;
+            return false;
+        }
+    }
+
+
+    // Funcția care deschide fereastra de selecție
+    async function discoverAndConnect(statusCallback) {
+        try {
+            if (statusCallback) statusCallback('Se caută imprimante...');
+            const device = await navigator.bluetooth.requestDevice({
+                filters: [{ namePrefix: 'D' }],
+                optionalServices: ['e7810a71-73ae-499d-8c15-faa9aef0c3f2', '49535343-fe7d-4ae5-8fa9-9fafd205e455']
+            });
+            return await connectToDevice(device, statusCallback);
+        } catch(error) {
+            if (statusCallback) statusCallback(`Eroare: ${error.message}`);
             return false;
         }
     }
@@ -323,7 +320,8 @@ document.addEventListener('DOMContentLoaded', () => {
         connectBtn.addEventListener('click', async () => {
             connectBtn.disabled = true;
             connectBtn.textContent = 'Se conectează...';
-            await connectToPrinter(statusCallback);
+            // Folosim noua funcție pentru descoperire
+            await discoverAndConnect(statusCallback);
             connectBtn.disabled = false;
             connectBtn.textContent = 'Caută Imprimantă';
         });
@@ -476,17 +474,21 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     
     async function autoConnectToPrinter() {
-        if (window.savedPrinterDevice && !isPrinterConnected()) {
-            showToast(`Încercare reconectare la imprimantă...`);
-            const success = await connectToPrinter((message) => {
-                console.log(`Auto-Connect Status: ${message}`);
-            }, true);
-
-            if (success) {
-                showToast("Imprimanta a fost reconectată automat.");
-            } else {
-                showToast("Reconectarea automată a eșuat. Conectați-vă manual.", 4000);
+        try {
+            const devices = await navigator.bluetooth.getDevices();
+            if (devices.length > 0) {
+                // Ne conectăm la primul dispozitiv pe care l-a aprobat utilizatorul
+                const device = devices[0];
+                showToast(`Se reconectează la ${device.name}...`);
+                const success = await connectToDevice(device, (message) => console.log(message));
+                if (success) {
+                    showToast("Imprimanta a fost reconectată automat.");
+                } else {
+                    showToast("Reconectarea automată a eșuat.", 4000);
+                }
             }
+        } catch(error) {
+            console.error("Eroare la obținerea dispozitivelor:", error);
         }
     }
 
