@@ -40,7 +40,6 @@ function _transformRawData(rawData) {
             name: 'Încărcare...',
             imageUrl: '',
             expected: product.orderedquantity || 0,
-            // Starea de bază, nemodificată
             baseFound: (product.bncondition || 0) + (product.vgcondition || 0) + (product.gcondition || 0) + (product.broken || 0),
             baseState: {
                 'new': product.bncondition || 0,
@@ -48,7 +47,6 @@ function _transformRawData(rawData) {
                 'good': product.gcondition || 0,
                 'broken': product.broken || 0
             },
-            // Starea "live", care va fi calculată
             found: 0,
             state: { 'new': 0, 'very-good': 0, 'good': 0, 'broken': 0 }
         }));
@@ -70,6 +68,12 @@ async function _fetchAndProcessDeltas(commandId) {
     if (!response.ok) throw new Error(`Delta Webhook failed: ${response.status}`);
     
     const rawDeltas = await response.json();
+    
+    // =================================================================
+    // AICI ESTE MODIFICAREA: AFIȘEAZĂ RĂSPUNSUL BRUT ÎN CONSOLĂ
+    console.log("RAW DELTA RESPONSE FROM SERVER:", JSON.stringify(rawDeltas, null, 2));
+    // =================================================================
+
     const processedDeltas = {};
 
     const relevantDeltas = Array.isArray(rawDeltas) 
@@ -93,7 +97,6 @@ export async function syncStateWithServer() {
     if (!accessCode) return false;
 
     try {
-        // Pas 1: Preluarea datelor de bază (din PostgreSQL)
         const baseResponse = await fetch(DATA_FETCH_WEBHOOK_URL, {
             method: 'POST',
             headers: { 'Content-Type': 'text/plain' },
@@ -105,17 +108,13 @@ export async function syncStateWithServer() {
         
         let commands = _transformRawData(baseData.data);
 
-        // Pas 2: Preluarea deltas și calcularea stării finale
         for (const command of commands) {
             const deltasForCommand = await _fetchAndProcessDeltas(command.id);
             for (const product of command.products) {
                 const productDeltas = deltasForCommand[product.asin] || {};
                 
-                // LOGICA NOUĂ ȘI ROBUSTĂ
-                // Se calculează starea finală pornind de la starea de bază curată
                 let totalFound = 0;
                 const finalState = {};
-
                 for (const condition in product.baseState) {
                     const baseValue = product.baseState[condition];
                     const deltaValue = productDeltas[condition] || 0;
@@ -125,7 +124,6 @@ export async function syncStateWithServer() {
                     totalFound += finalValue;
                 }
                 
-                // Se atribuie valorile finale calculate
                 product.state = finalState;
                 product.found = totalFound;
             }
