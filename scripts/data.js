@@ -15,11 +15,16 @@ export async function fetchDataAndSyncState() {
     if (!accessCode) return false;
 
     try {
+        // --- START CORECȚIE ---
+        // Adăugăm opțiunea 'cache: 'no-store'' pentru a forța reîncărcarea datelor proaspete
         const response = await fetch(DATA_FETCH_URL, {
             method: 'POST',
             headers: { 'Content-Type': 'text/plain' },
             body: JSON.stringify({ code: accessCode }),
+            cache: 'no-store' 
         });
+        // --- FINAL CORECȚIE ---
+
         if (!response.ok) throw new Error('Network error during data fetch');
         
         const responseData = await response.json();
@@ -119,11 +124,7 @@ export async function fetchProductDetailsInBulk(asins) {
         if (!response.ok) throw new Error(`Network response was not ok`);
         
         const responseData = await response.json();
-        
-        // --- START CORECȚIE ---
-        // Logica a fost simplificată pentru a fi mai robustă la schimbările de format
         const bulkData = responseData.products || responseData;
-        // --- FINAL CORECȚIE ---
 
         for (const asin of asinsToFetch) {
             const productData = bulkData[asin] || { title: 'Nume indisponibil', images: [] };
