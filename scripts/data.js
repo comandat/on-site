@@ -5,14 +5,10 @@ const DATA_FETCH_URL = 'https://automatizare.comandat.ro/webhook/5a447557-8d52-4
 const PRODUCT_DETAILS_URL = 'https://automatizare.comandat.ro/webhook/f1bb3c1c-3730-4672-b989-b3e73b911043';
 const STOCK_UPDATE_URL = 'https://automatizare.comandat.ro/webhook/4bef3762-2d4f-437d-a05c-001ccb597ab9';
 
-// --- STOCAREA STĂRII APLICAȚIEI ---
-// Am adăugat "export" direct aici pentru a garanta că obiectul este exportat corect.
 export const AppState = {
     getCommands: () => JSON.parse(sessionStorage.getItem('liveCommandsData') || '[]'),
     setCommands: (commands) => sessionStorage.setItem('liveCommandsData', JSON.stringify(commands))
 };
-
-// --- FUNCȚII PUBLICE ---
 
 export async function fetchDataAndSyncState() {
     const accessCode = sessionStorage.getItem('lastAccessCode');
@@ -43,8 +39,8 @@ export async function fetchDataAndSyncState() {
                     };
                     const found = Object.values(state).reduce((sum, val) => Number(sum) + Number(val), 0);
                     return {
-                        id: p.productsku,
-                        asin: p.asin,
+                        id: p.productsku, // ID intern al aplicației
+                        asin: p.asin,     // Cheia primară pentru baza de date
                         expected: p.orderedquantity || 0,
                         found: found,
                         state: state,
@@ -62,6 +58,7 @@ export async function fetchDataAndSyncState() {
     }
 }
 
+// AICI ESTE CORECTURA PRINCIPALĂ
 export async function sendStockUpdate(commandId, productAsin, stockDelta) {
     const changes = [];
     for (const condition in stockDelta) {
@@ -76,9 +73,10 @@ export async function sendStockUpdate(commandId, productAsin, stockDelta) {
 
     if (changes.length === 0) return true;
 
+    // Payload-ul trimis la n8n folosește acum cheia "asin"
     const payload = {
         orderId: commandId,
-        productAsin: productAsin,
+        asin: productAsin, // Am schimbat "productAsin" în "asin"
         changes: changes
     };
 
