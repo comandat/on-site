@@ -1,5 +1,5 @@
 // scripts/login.js
-import { syncStateWithServer } from './data.js';
+import { fetchDataAndSyncState } from './data.js';
 
 document.addEventListener('DOMContentLoaded', () => {
     if (sessionStorage.getItem('isLoggedIn') === 'true') {
@@ -38,14 +38,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 throw new Error('Login failed');
             }
 
-            // Salvează informațiile esențiale pentru sesiunea curentă
             sessionStorage.setItem('loggedInUser', loginData.user);
             sessionStorage.setItem('lastAccessCode', accessCode);
 
-            // PAS 2: Sincronizare completă a datelor folosind noul modul
-            // Această funcție va prelua datele de bază, va aplica modificările (delta)
-            // și va salva totul în sessionStorage, pregătit pentru restul aplicației.
-            const syncSuccess = await syncStateWithServer();
+            // PAS 2: Sincronizare completă a datelor folosind funcția cu numele corect
+            const syncSuccess = await fetchDataAndSyncState();
 
             if (syncSuccess) {
                 sessionStorage.setItem('isLoggedIn', 'true');
@@ -56,7 +53,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
         } catch (error) {
             console.error('Eroare la autentificare:', error);
-            // Afișăm un mesaj generic doar dacă nu am setat deja unul
             if (!errorMessage.textContent) {
                 errorMessage.textContent = 'Eroare la conectare. Vă rugăm încercați din nou.';
             }
@@ -76,8 +72,4 @@ document.addEventListener('DOMContentLoaded', () => {
             errorMessage.textContent = 'Vă rugăm introduceți un cod.';
         }
     });
-
-    // Adaugă import-ul necesar în index.html
-    // Asigură-te că tag-ul script pentru login.js are type="module"
 });
-
