@@ -275,34 +275,49 @@ document.addEventListener('DOMContentLoaded', () => {
         const success = await sendStockUpdate(currentCommandId, productAsinForPrinting, delta);
         
         if (success) {
-            // Aici este pasul cheie. Reîncărcăm datele de la server.
             await fetchDataAndSyncState();
-            // Apoi, redesenăm pagina cu noile date.
             renderPageContent();
 
+            // --- START MODIFICARE: LOGICA DE PRINTARE MULTIPLĂ ---
             const conditionMap = { 'new': 'CN', 'very-good': 'FB', 'good': 'B' };
-            let itemsAdded = false;
+            const printQueue = [];
+
             for (const condition in delta) {
-                if (delta[condition] > 0) {
-                    itemsAdded = true;
-                    break;
+                // Verificăm dacă s-au adăugat produse (delta > 0) și dacă condiția este printabilă
+                if (delta[condition] > 0 && conditionMap[condition]) {
+                    // Adăugăm în coadă numărul exact de etichete necesare
+                    for (let i = 0; i < delta[condition]; i++) {
+                        printQueue.push({
+                            code: productAsinForPrinting,
+                            conditionLabel: conditionMap[condition]
+                        });
+                    }
                 }
             }
             
             hideModal();
 
-            if (itemsAdded) {
-                try {
-                    const firstCondition = Object.keys(delta).find(c => delta[c] > 0 && conditionMap[c]);
-                    showToast(`Se printează eticheta pentru: ${productAsinForPrinting}`);
-                    await printSingleLabel(productAsinForPrinting, conditionMap[firstCondition]);
-                    showToast(`S-a finalizat imprimarea.`);
-                } catch (e) {
-                    console.error("Eroare la imprimare:", e);
-                    showToast(`Eroare la imprimare. Verificați consola.`);
-                    return;
+            if (printQueue.length > 0) {
+                showToast(`Se inițiază imprimarea pentru ${printQueue.length} etichete...`);
+                // Procesăm secvențial fiecare element din coada de printare
+                for (let i = 0; i < printQueue.length; i++) {
+                    const item = printQueue[i];
+                    try {
+                        showToast(`Se printează ${i + 1}/${printQueue.length}: ${item.code}`);
+                        await printSingleLabel(item.code, item.conditionLabel);
+                        // Adăugăm o mică pauză între etichete pentru a nu bloca imprimanta
+                        await new Promise(res => setTimeout(res, 800));
+                    } catch (e) {
+                        showToast(`Eroare la eticheta ${i + 1}. Procesul s-a oprit.`);
+                        console.error("Eroare la imprimare:", e);
+                        // Oprim procesul dacă o etichetă eșuează
+                        return;
+                    }
                 }
+                showToast(`S-a finalizat imprimarea.`);
             }
+            // --- FINAL MODIFICARE ---
+
         } else {
             alert('Eroare la salvare! Vă rugăm încercați din nou.');
             saveButton.disabled = false;
