@@ -8,6 +8,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     let currentCommandId = null;
     let currentProductId = null;
+
     let currentProduct = null;
     let swiper = null;
 
@@ -51,22 +52,18 @@ document.addEventListener('DOMContentLoaded', () => {
         return new Uint8Array(packet);
     }
 
-    async function sendCommandAndWait(characteristic, packet) {
+    async function sendCommandAndWait(characteristic, packet, timeoutMs = 5000) {
         return new Promise((resolve, reject) => {
             const specificHandler = (event) => {
                 characteristic.removeEventListener('characteristicvaluechanged', specificHandler);
                 clearTimeout(timeout);
-                const value = new Uint8Array(event.target.value.buffer);
-                resolve(value);
+                resolve(new Uint8Array(event.target.value.buffer));
             };
-
             characteristic.addEventListener('characteristicvaluechanged', specificHandler);
-
             const timeout = setTimeout(() => {
                 characteristic.removeEventListener('characteristicvaluechanged', specificHandler);
-                reject(new Error('Timeout: Imprimanta nu a răspuns în 5 secunde.'));
-            }, 5000);
-
+                reject(new Error(`Timeout: Imprimanta nu a răspuns în ${timeoutMs / 1000} secunde.`));
+            }, timeoutMs);
             characteristic.writeValueWithoutResponse(packet).catch(err => {
                 characteristic.removeEventListener('characteristicvaluechanged', specificHandler);
                 clearTimeout(timeout);
@@ -74,6 +71,28 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         });
     }
+
+    // --- START MODIFICARE: Funcție pentru a aștepta ca imprimanta să fie liberă ---
+    async function waitForPrinterReady() {
+        if (!isPrinterConnected()) throw new Error("Imprimanta nu este conectată.");
+        
+        // Buclă care întreabă starea imprimantei la fiecare 200ms
+        for (let i = 0; i < 50; i++) { // Încearcă maxim 10 secunde
+            try {
+                const statusPacket = createNiimbotPacket(0xA3, [1]);
+                const response = await sendCommandAndWait(niimbotCharacteristic, statusPacket, 500);
+                // Starea "liber" este de obicei 0. Verificăm al 4-lea byte din răspuns.
+                if (response && response.length > 3 && response[3] === 0) {
+                    return; // Imprimanta este liberă, ieșim din funcție
+                }
+            } catch (e) {
+                // Ignorăm erorile de timeout și reîncercăm
+            }
+            await new Promise(res => setTimeout(res, 200)); // Așteptăm înainte de a întreba din nou
+        }
+        throw new Error("Imprimanta nu a devenit liberă în timp util.");
+    }
+    // --- FINAL MODIFICARE ---
 
     async function connectToPrinter(statusCallback) {
         if (isPrinterConnected()) {
@@ -194,9 +213,8 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             const delay = ms => new Promise(res => setTimeout(res, ms));
-
-            // --- START MODIFICARE: Trimitere rapidă a comenzilor de configurare ---
             const write = (packet) => niimbotCharacteristic.writeValueWithoutResponse(packet);
+            
             await write(createNiimbotPacket(0x21, [3]));
             await write(createNiimbotPacket(0x23, [1]));
             await write(createNiimbotPacket(0x01, [1]));
@@ -204,18 +222,14 @@ document.addEventListener('DOMContentLoaded', () => {
             const dimensionData = [(canvas.height >> 8) & 0xFF, canvas.height & 0xFF, (canvas.width >> 8) & 0xFF, canvas.width & 0xFF];
             await write(createNiimbotPacket(0x13, dimensionData));
             await write(createNiimbotPacket(0x15, [0, 1]));
-            // --- FINAL MODIFICARE ---
 
             for (const packet of imagePackets) {
-                await niimbotCharacteristic.writeValueWithoutResponse(packet);
-                await delay(20); // Păstrăm o mică pauză pentru a nu suprasolicita buffer-ul imprimantei
+                await write(packet);
+                await delay(20);
             }
 
-            // --- START MODIFICARE: Așteptăm confirmarea doar la finalul printării ---
             await write(createNiimbotPacket(0xE3, [1]));
-            await sendCommandAndWait(niimbotCharacteristic, createNiimbotPacket(0xF3, [1])); // Singura comandă care așteaptă răspuns
-            // --- FINAL MODIFICARE ---
-
+            await sendCommandAndWait(niimbotCharacteristic, createNiimbotPacket(0xF3, [1]));
         } catch (error) {
             console.error(`Eroare critică la printarea etichetei: ${textToPrint}`, error);
             throw error;
@@ -303,8 +317,11 @@ document.addEventListener('DOMContentLoaded', () => {
                     try {
                         showToast(`Se printează ${i + 1}/${printQueue.length}: ${item.code}`);
                         await printSingleLabel(item.code, item.conditionLabel);
-                        // Pauza nu mai este la fel de critică, dar o păstrăm ca extra siguranță
-                        await new Promise(res => setTimeout(res, 400));
+                        
+                        // --- START MODIFICARE: Așteptăm confirmarea că imprimanta e liberă ---
+                        await waitForPrinterReady();
+                        // --- FINAL MODIFICARE ---
+
                     } catch (e) {
                         showToast(`Eroare la eticheta ${i + 1}. Procesul s-a oprit.`);
                         console.error("Eroare la imprimare:", e);
