@@ -276,9 +276,9 @@ document.addEventListener('DOMContentLoaded', () => {
         
         pageElements.openModalButton.addEventListener('click', () => {
             if (!isPrinterConnected()) {
-                showPrinterModal();
+                showPrinterModal(); // <-- Aici se afișează pop-up-ul imprimantei
             } else {
-                showModal();
+                showModal(); // <-- Sau se afișează pop-up-ul de stoc
             }
         });
     }
