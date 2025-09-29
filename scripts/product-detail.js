@@ -5,7 +5,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- START: Variabilele pentru printare și starea aplicației ---
     let niimbotCharacteristic = null;
     let isConnecting = false;
-    let responseResolver = null;
+    // --- AM ELIMINAT 'responseResolver' ---
 
     let currentCommandId = null;
     let currentProductId = null;
@@ -52,30 +52,37 @@ document.addEventListener('DOMContentLoaded', () => {
         return new Uint8Array(packet);
     }
 
-    function handleCharacteristicValueChanged(event) {
-        if (responseResolver) {
-            const value = new Uint8Array(event.target.value.buffer);
-            responseResolver(value);
-            responseResolver = null;
-        }
-    }
+    // --- START MODIFICARE: AM ELIMINAT 'handleCharacteristicValueChanged' ---
 
+    // --- START MODIFICARE: Funcție 'sendCommandAndWait' rescrisă pentru a fi mai robustă ---
     async function sendCommandAndWait(characteristic, packet) {
         return new Promise((resolve, reject) => {
-            responseResolver = resolve;
+            // Definim un handler specific pentru răspunsul acestei comenzi
+            const specificHandler = (event) => {
+                characteristic.removeEventListener('characteristicvaluechanged', specificHandler);
+                clearTimeout(timeout);
+                const value = new Uint8Array(event.target.value.buffer);
+                resolve(value);
+            };
+
+            // Adăugăm listener-ul specific
+            characteristic.addEventListener('characteristicvaluechanged', specificHandler);
+
+            // Setăm un timeout
             const timeout = setTimeout(() => {
-                if (responseResolver) {
-                    responseResolver = null;
-                    reject(new Error('Timeout: Imprimanta nu a răspuns.'));
-                }
+                characteristic.removeEventListener('characteristicvaluechanged', specificHandler);
+                reject(new Error('Timeout: Imprimanta nu a răspuns în 5 secunde.'));
             }, 5000);
 
+            // Trimitem comanda
             characteristic.writeValueWithoutResponse(packet).catch(err => {
+                characteristic.removeEventListener('characteristicvaluechanged', specificHandler);
                 clearTimeout(timeout);
                 reject(err);
             });
         });
     }
+    // --- FINAL MODIFICARE ---
 
     async function connectToPrinter(statusCallback) {
         if (isPrinterConnected()) {
@@ -118,7 +125,9 @@ document.addEventListener('DOMContentLoaded', () => {
             
             niimbotCharacteristic = foundCharacteristic;
             await niimbotCharacteristic.startNotifications();
-            niimbotCharacteristic.addEventListener('characteristicvaluechanged', handleCharacteristicValueChanged);
+            // --- START MODIFICARE: AM ELIMINAT listener-ul global ---
+            // niimbotCharacteristic.addEventListener('characteristicvaluechanged', handleCharacteristicValueChanged);
+            // --- FINAL MODIFICARE ---
             if (statusCallback) statusCallback(`Conectat la ${device.name}. Gata de imprimare.`);
             
             device.addEventListener('gattserverdisconnected', () => {
@@ -278,14 +287,11 @@ document.addEventListener('DOMContentLoaded', () => {
             await fetchDataAndSyncState();
             renderPageContent();
 
-            // --- START MODIFICARE: LOGICA DE PRINTARE MULTIPLĂ ---
             const conditionMap = { 'new': 'CN', 'very-good': 'FB', 'good': 'B' };
             const printQueue = [];
 
             for (const condition in delta) {
-                // Verificăm dacă s-au adăugat produse (delta > 0) și dacă condiția este printabilă
                 if (delta[condition] > 0 && conditionMap[condition]) {
-                    // Adăugăm în coadă numărul exact de etichete necesare
                     for (let i = 0; i < delta[condition]; i++) {
                         printQueue.push({
                             code: productAsinForPrinting,
@@ -299,24 +305,20 @@ document.addEventListener('DOMContentLoaded', () => {
 
             if (printQueue.length > 0) {
                 showToast(`Se inițiază imprimarea pentru ${printQueue.length} etichete...`);
-                // Procesăm secvențial fiecare element din coada de printare
                 for (let i = 0; i < printQueue.length; i++) {
                     const item = printQueue[i];
                     try {
                         showToast(`Se printează ${i + 1}/${printQueue.length}: ${item.code}`);
                         await printSingleLabel(item.code, item.conditionLabel);
-                        // Adăugăm o mică pauză între etichete pentru a nu bloca imprimanta
                         await new Promise(res => setTimeout(res, 800));
                     } catch (e) {
                         showToast(`Eroare la eticheta ${i + 1}. Procesul s-a oprit.`);
                         console.error("Eroare la imprimare:", e);
-                        // Oprim procesul dacă o etichetă eșuează
                         return;
                     }
                 }
                 showToast(`S-a finalizat imprimarea.`);
             }
-            // --- FINAL MODIFICARE ---
 
         } else {
             alert('Eroare la salvare! Vă rugăm încercați din nou.');
