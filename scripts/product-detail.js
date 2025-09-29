@@ -291,7 +291,7 @@ async function printLabel(productCode, conditionLabel, quantity = 1) {
                         await printLabel(item.code, item.conditionLabel, item.quantity);
                         
                         // --- MODIFICARE: Așteaptă o secundă înainte de următoarea etichetă ---
-                        await new Promise(resolve => setTimeout(resolve, 1000)); 
+                        await new Promise(resolve => setTimeout(resolve, 5000)); 
 
                     } catch (e) {
                         showToast(`Eroare la imprimare. Procesul s-a oprit.`);
@@ -494,6 +494,7 @@ async function printLabel(productCode, conditionLabel, quantity = 1) {
     }
     initializePage();
 });
+
 
 
 
