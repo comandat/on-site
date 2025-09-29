@@ -56,6 +56,9 @@ document.addEventListener('DOMContentLoaded', () => {
         saveButton.disabled = true;
         saveButton.textContent = 'Se salvează...';
 
+        // --- MODIFICARE AICI: Salvăm ASIN-ul într-o variabilă locală sigură ---
+        const productAsinForPrinting = currentProduct.asin;
+
         const delta = {};
         let hasChanges = false;
         for (const condition in stockStateAtModalOpen) {
@@ -73,7 +76,8 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        const success = await sendStockUpdate(currentCommandId, currentProduct.asin, delta);
+        // Folosim variabila locală pentru trimiterea actualizării
+        const success = await sendStockUpdate(currentCommandId, productAsinForPrinting, delta);
         
         if (success) {
             await fetchDataAndSyncState();
@@ -84,7 +88,8 @@ document.addEventListener('DOMContentLoaded', () => {
             for (const condition in delta) {
                 if (delta[condition] > 0 && conditionMap[condition]) {
                     for (let i = 0; i < delta[condition]; i++) {
-                        queue.push({ code: currentProduct.asin, conditionLabel: conditionMap[condition] });
+                        // --- MODIFICARE AICI: Folosim variabila locală și pentru printare ---
+                        queue.push({ code: productAsinForPrinting, conditionLabel: conditionMap[condition] });
                     }
                 }
             }
@@ -276,9 +281,9 @@ document.addEventListener('DOMContentLoaded', () => {
         
         pageElements.openModalButton.addEventListener('click', () => {
             if (!isPrinterConnected()) {
-                showPrinterModal(); // <-- Aici se afișează pop-up-ul imprimantei
+                showPrinterModal();
             } else {
-                showModal(); // <-- Sau se afișează pop-up-ul de stoc
+                showModal();
             }
         });
     }
