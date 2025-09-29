@@ -47,7 +47,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function createNiimbotPacket(type, data) {
         const dataBytes = Array.isArray(data) ? data : [data];
-        // Corecția este aici: ne asigurăm că suma de control este un singur byte folosind `& 0xFF`
         const checksum = (dataBytes.reduce((acc, byte) => acc ^ byte, type ^ dataBytes.length)) & 0xFF;
         const packet = [0x55, 0x55, type, dataBytes.length, ...dataBytes, checksum, 0xAA, 0xAA];
         return new Uint8Array(packet);
@@ -140,6 +139,17 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!isPrinterConnected()) {
             throw new Error("Imprimanta nu este conectată.");
         }
+        
+        // --- START CORECȚIE EROARE ---
+        // Verificăm dacă productCode este un string valid și non-gol
+        if (typeof productCode !== 'string' || productCode.trim().length === 0) {
+            const errorMsg = `Cod de produs invalid pentru generarea etichetei: '${productCode}'`;
+            console.error(errorMsg);
+            showToast('Eroare: Cod de produs lipsă pentru etichetă.');
+            throw new Error(errorMsg);
+        }
+        // --- FINAL CORECȚIE EROARE ---
+
         const textToPrint = `${productCode}${conditionLabel}`;
         try {
             const labelWidth = 240;
@@ -274,22 +284,23 @@ document.addEventListener('DOMContentLoaded', () => {
             
             hideModal();
 
+            // --- START MODIFICARE: PRINTEAZĂ O SINGURĂ ETICHETĂ ---
             if (printQueue.length > 0) {
-                showToast(`Se inițiază imprimarea pentru ${printQueue.length} etichete...`);
-                for (let i = 0; i < printQueue.length; i++) {
-                    const item = printQueue[i];
-                    try {
-                        showToast(`Se printează ${i + 1}/${printQueue.length}: ${item.code}`);
-                        await printSingleLabel(item.code, item.conditionLabel);
-                        await new Promise(res => setTimeout(res, 800)); // Pauză între etichete
-                    } catch (e) {
-                        showToast(`Eroare la eticheta ${i + 1}. Procesul s-a oprit.`);
-                        console.error("Eroare la imprimare:", e);
-                        return;
-                    }
+                showToast(`Se pregătește o singură etichetă pentru imprimare...`);
+                
+                const itemToPrint = printQueue[0]; // Luăm doar primul articol din coadă
+                try {
+                    showToast(`Se printează eticheta pentru: ${itemToPrint.code}`);
+                    await printSingleLabel(itemToPrint.code, itemToPrint.conditionLabel);
+                    showToast(`S-a finalizat imprimarea.`);
+                } catch (e) {
+                    // Eroarea este deja gestionată și afișată în funcția printSingleLabel sau aici pentru alte cazuri
+                    console.error("Eroare la imprimare:", e);
+                    // Oprim procesul în caz de eroare
+                    return;
                 }
-                showToast(`S-a finalizat imprimarea.`);
             }
+            // --- FINAL MODIFICARE ---
 
         } else {
             alert('Eroare la salvare! Vă rugăm încercați din nou.');
@@ -369,6 +380,8 @@ document.addEventListener('DOMContentLoaded', () => {
         addModalEventListeners();
         pageElements.stockModal.classList.remove('hidden');
     }
+
+
 
     function hideModal() {
         const modalContent = pageElements.stockModal.querySelector('div');
@@ -483,4 +496,3 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     initializePage();
 });
-
