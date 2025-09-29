@@ -35,7 +35,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }, duration);
     }
     
-    // --- START: LOGICA DE PRINTARE (CU DIAGNOSTICARE INCLUSĂ) ---
     function isPrinterConnected() {
         return niimbotCharacteristic !== null;
     }
@@ -47,44 +46,35 @@ document.addEventListener('DOMContentLoaded', () => {
         return new Uint8Array(packet);
     }
 
- 
-    // --- START MODIFICARE: Funcție de conectare cu diagnosticare ---
-    async function connectToPrinter(statusCallback) {
+    async function connectToPrinter(statusCallback, isAutoConnect = false) {
         if (isPrinterConnected()) {
             if (statusCallback) statusCallback("Deja conectat.");
             return true;
         }
         if (isConnecting) {
-             if (statusCallback) statusCallback("Conectarea este deja în progres...");
+            if (statusCallback) statusCallback("Conectarea este deja în progres...");
             return false;
         }
         isConnecting = true;
+        
         try {
-            if (statusCallback) statusCallback('Se caută imprimante...');
-            const device = await navigator.bluetooth.requestDevice({
-                filters: [{ namePrefix: 'D' }],
-                optionalServices: ['e7810a71-73ae-499d-8c15-faa9aef0c3f2', '49535343-fe7d-4ae5-8fa9-9fafd205e455']
-            });
+            let device;
+            if (window.savedPrinterDevice) {
+                device = window.savedPrinterDevice;
+                if (statusCallback) statusCallback(`Se încearcă reconectarea la ${device.name}...`);
+            } else {
+                if (statusCallback) statusCallback('Se caută imprimante...');
+                device = await navigator.bluetooth.requestDevice({
+                    filters: [{ namePrefix: 'D' }],
+                    optionalServices: ['e7810a71-73ae-499d-8c15-faa9aef0c3f2', '49535343-fe7d-4ae5-8fa9-9fafd205e455']
+                });
+                window.savedPrinterDevice = device;
+            }
             
             if (statusCallback) statusCallback(`Conectare la ${device.name}...`);
             const server = await device.gatt.connect();
             
-            console.clear();
-            console.log(`%c--- DIAGNOSTICARE BLUETOOTH PENTRU ${device.name} ---`, 'color: blue; font-weight: bold;');
-
             const services = await server.getPrimaryServices();
-            for (const service of services) {
-                console.log(`%cServiciu găsit: ${service.uuid}`, 'color: green;');
-                const characteristics = await service.getCharacteristics();
-                for (const characteristic of characteristics) {
-                    const props = Object.keys(characteristic.properties)
-                        .filter(key => characteristic.properties[key] === true)
-                        .join(', ');
-                    console.log(`  -> Caracteristică: ${characteristic.uuid} | Proprietăți: [${props}]`);
-                }
-            }
-            console.log(`%c--- FINAL DIAGNOSTICARE ---`, 'color: blue; font-weight: bold;');
-            
             let foundCharacteristic = null;
             for (const service of services) {
                 const characteristics = await service.getCharacteristics();
@@ -96,11 +86,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
                 if (foundCharacteristic) break;
             }
-            if (!foundCharacteristic) throw new Error('Nu am găsit o caracteristică potrivită pentru imprimare.');
+            if (!foundCharacteristic) throw new Error('Nu am găsit o caracteristică potrivită.');
             
             niimbotCharacteristic = foundCharacteristic;
             await niimbotCharacteristic.startNotifications();
-            if (statusCallback) statusCallback(`Conectat la ${device.name}. Gata de imprimare.`);
+            
+            if (statusCallback) statusCallback(`Conectat la ${device.name}.`);
             
             device.addEventListener('gattserverdisconnected', () => {
                 showToast('Imprimanta a fost deconectată.');
@@ -108,108 +99,102 @@ document.addEventListener('DOMContentLoaded', () => {
             });
             isConnecting = false;
             return true;
+
         } catch (error) {
-            if (statusCallback) statusCallback(`Eroare: ${error.message}`);
+            if (isAutoConnect && error.name === 'NotFoundError') {
+                 if (statusCallback) statusCallback("Imprimanta salvată nu a fost găsită. Vă rugăm să o selectați manual.");
+                 window.savedPrinterDevice = null;
+            } else {
+                if (statusCallback) statusCallback(`Eroare: ${error.message}`);
+            }
             niimbotCharacteristic = null;
             isConnecting = false;
             return false;
         }
     }
-    // --- FINAL MODIFICARE ---
 
-// scripts/product-detail.js
+    async function printLabel(productCode, conditionLabel, quantity = 1) {
+        if (!isPrinterConnected()) throw new Error("Imprimanta nu este conectată.");
 
-// --- START: ÎNLOCUIRE COMPLETĂ A FUNCȚIEI printLabel ---
-// (Asigurați-vă că ați șters vechea funcție sendCommandAndWait)
-
-async function printLabel(productCode, conditionLabel, quantity = 1) {
-    if (!isPrinterConnected()) throw new Error("Imprimanta nu este conectată.");
-
-    const textToPrint = `${productCode}${conditionLabel}`;
-    
-    // Funcție ajutătoare pentru a trimite o comandă și a aștepta puțin
-    const writeAndDelay = async (packet, ms = 40) => {
-        await niimbotCharacteristic.writeValueWithoutResponse(packet);
-        await new Promise(res => setTimeout(res, ms));
-    };
-
-    try {
-        const labelWidth = 240;
-        const labelHeight = 120;
-        const canvas = document.createElement('canvas');
-        canvas.width = labelHeight;
-        canvas.height = labelWidth;
-        const ctx = canvas.getContext('2d');
+        const textToPrint = `${productCode}${conditionLabel}`;
         
-        // --- Generare imagine pe canvas (cod neschimbat) ---
-        ctx.fillStyle = 'black';
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-        ctx.save();
-        ctx.translate(canvas.width / 2, canvas.height / 2);
-        ctx.rotate(90 * Math.PI / 180);
-        const verticalOffset = 10;
-        
-        const qr = qrcode(0, 'M');
-        qr.addData(textToPrint);
-        qr.make();
-        const qrImg = new Image();
-        qrImg.src = qr.createDataURL(6, 2);
-        await new Promise(resolve => { qrImg.onload = resolve; });
-        
-        const qrSize = 85; 
-        ctx.drawImage(qrImg, -labelWidth / 2 + 15, -labelHeight / 2 + 18 + verticalOffset, qrSize, qrSize);
-        ctx.fillStyle = 'white';
-        ctx.font = 'bold 24px Arial';
-        ctx.textAlign = 'left';
-        ctx.textBaseline = 'middle';
-        const line1 = textToPrint.substring(0, 6);
-        const line2 = textToPrint.substring(6);
-        ctx.fillText(line1, -labelWidth / 2 + qrSize + 30, -15 + verticalOffset);
-        ctx.fillText(line2, -labelWidth / 2 + qrSize + 30, 15 + verticalOffset);
-        ctx.restore();
-        
-        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-        const imagePackets = [];
-        const widthInBytes = Math.ceil(canvas.width / 8);
-        for (let y = 0; y < canvas.height; y++) {
-            let lineBytes = new Uint8Array(widthInBytes);
-            for (let x = 0; x < canvas.width; x++) {
-                const pixelIndex = (y * canvas.width + x) * 4;
-                const pixelValue = imageData.data[pixelIndex] > 128 ? 1 : 0;
-                if (pixelValue === 1) {
-                    lineBytes[Math.floor(x / 8)] |= (1 << (7 - (x % 8)));
+        const writeAndDelay = async (packet, ms = 40) => {
+            await niimbotCharacteristic.writeValueWithoutResponse(packet);
+            await new Promise(res => setTimeout(res, ms));
+        };
+
+        try {
+            const labelWidth = 240;
+            const labelHeight = 120;
+            const canvas = document.createElement('canvas');
+            canvas.width = labelHeight;
+            canvas.height = labelWidth;
+            const ctx = canvas.getContext('2d');
+            
+            ctx.fillStyle = 'black';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.save();
+            ctx.translate(canvas.width / 2, canvas.height / 2);
+            ctx.rotate(90 * Math.PI / 180);
+            const verticalOffset = 10;
+            
+            const qr = qrcode(0, 'M');
+            qr.addData(textToPrint);
+            qr.make();
+            const qrImg = new Image();
+            qrImg.src = qr.createDataURL(6, 2);
+            await new Promise(resolve => { qrImg.onload = resolve; });
+            
+            const qrSize = 85; 
+            ctx.drawImage(qrImg, -labelWidth / 2 + 15, -labelHeight / 2 + 18 + verticalOffset, qrSize, qrSize);
+            ctx.fillStyle = 'white';
+            ctx.font = 'bold 24px Arial';
+            ctx.textAlign = 'left';
+            ctx.textBaseline = 'middle';
+            const line1 = textToPrint.substring(0, 6);
+            const line2 = textToPrint.substring(6);
+            ctx.fillText(line1, -labelWidth / 2 + qrSize + 30, -15 + verticalOffset);
+            ctx.fillText(line2, -labelWidth / 2 + qrSize + 30, 15 + verticalOffset);
+            ctx.restore();
+            
+            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            const imagePackets = [];
+            const widthInBytes = Math.ceil(canvas.width / 8);
+            for (let y = 0; y < canvas.height; y++) {
+                let lineBytes = new Uint8Array(widthInBytes);
+                for (let x = 0; x < canvas.width; x++) {
+                    const pixelIndex = (y * canvas.width + x) * 4;
+                    const pixelValue = imageData.data[pixelIndex] > 128 ? 1 : 0;
+                    if (pixelValue === 1) {
+                        lineBytes[Math.floor(x / 8)] |= (1 << (7 - (x % 8)));
+                    }
                 }
+                const header = [(y >> 8) & 0xFF, y & 0xFF, 0, 0, 0, 1];
+                const dataPayload = Array.from(new Uint8Array([...header, ...lineBytes]));
+                imagePackets.push(createNiimbotPacket(0x85, dataPayload));
             }
-            const header = [(y >> 8) & 0xFF, y & 0xFF, 0, 0, 0, 1];
-            const dataPayload = Array.from(new Uint8Array([...header, ...lineBytes]));
-            imagePackets.push(createNiimbotPacket(0x85, dataPayload));
+
+            await writeAndDelay(createNiimbotPacket(0x21, [3]));
+            await writeAndDelay(createNiimbotPacket(0x23, [1]));
+            await writeAndDelay(createNiimbotPacket(0x01, [1]));
+            await writeAndDelay(createNiimbotPacket(0x03, [1]));
+            
+            const dimensionData = [(canvas.height >> 8) & 0xFF, canvas.height & 0xFF, (canvas.width >> 8) & 0xFF, canvas.width & 0xFF];
+            await writeAndDelay(createNiimbotPacket(0x13, dimensionData));
+            await writeAndDelay(createNiimbotPacket(0x15, [0, quantity]));
+            
+            for (const packet of imagePackets) {
+                await writeAndDelay(packet, 20); 
+            }
+
+            await writeAndDelay(createNiimbotPacket(0xE3, [1]));
+            await writeAndDelay(createNiimbotPacket(0xF3, [1]));
+
+        } catch (error) {
+            console.error(`Eroare critică la printarea etichetei: ${textToPrint}`, error);
+            throw error;
         }
-
-        // --- Trimitere comenzi către imprimantă (cod SIMPLIFICAT) ---
-        await writeAndDelay(createNiimbotPacket(0x21, [3]));
-        await writeAndDelay(createNiimbotPacket(0x23, [1]));
-        await writeAndDelay(createNiimbotPacket(0x01, [1]));
-        await writeAndDelay(createNiimbotPacket(0x03, [1]));
-        
-        const dimensionData = [(canvas.height >> 8) & 0xFF, canvas.height & 0xFF, (canvas.width >> 8) & 0xFF, canvas.width & 0xFF];
-        await writeAndDelay(createNiimbotPacket(0x13, dimensionData));
-        await writeAndDelay(createNiimbotPacket(0x15, [0, quantity]));
-        
-        for (const packet of imagePackets) {
-            // Pauză mai mică pentru pachetele de imagine
-            await writeAndDelay(packet, 20); 
-        }
-
-        await writeAndDelay(createNiimbotPacket(0xE3, [1]));
-        await writeAndDelay(createNiimbotPacket(0xF3, [1]));
-
-    } catch (error) {
-        console.error(`Eroare critică la printarea etichetei: ${textToPrint}`, error);
-        throw error;
     }
-}
-
-// --- FINAL: ÎNLOCUIRE COMPLETĂ ---
 
     function getLatestProductData() {
         const command = AppState.getCommands().find(c => c.id === currentCommandId);
@@ -289,14 +274,11 @@ async function printLabel(productCode, conditionLabel, quantity = 1) {
                     try {
                         showToast(`Se printează ${item.quantity} etichete pentru ${item.code}`);
                         await printLabel(item.code, item.conditionLabel, item.quantity);
-                        
-                        // --- MODIFICARE: Așteaptă o secundă înainte de următoarea etichetă ---
-                        await new Promise(resolve => setTimeout(resolve, 5000)); 
-
+                        await new Promise(resolve => setTimeout(resolve, 3000)); 
                     } catch (e) {
                         showToast(`Eroare la imprimare. Procesul s-a oprit.`);
                         console.error("Eroare la imprimare:", e);
-                        return; // Oprește procesul dacă apare o eroare
+                        return;
                     }
                 }
                 showToast(`S-a finalizat imprimarea.`);
@@ -492,11 +474,22 @@ async function printLabel(productCode, conditionLabel, quantity = 1) {
         pageElements.openModalButton.addEventListener('click', openModalFlow);
         pageElements.footerPrinterButton.addEventListener('click', openModalFlow);
     }
+    
+    async function autoConnectToPrinter() {
+        if (window.savedPrinterDevice && !isPrinterConnected()) {
+            showToast(`Încercare reconectare la imprimantă...`);
+            const success = await connectToPrinter((message) => {
+                console.log(`Auto-Connect Status: ${message}`);
+            }, true);
+
+            if (success) {
+                showToast("Imprimanta a fost reconectată automat.");
+            } else {
+                showToast("Reconectarea automată a eșuat. Conectați-vă manual.", 4000);
+            }
+        }
+    }
+
+    autoConnectToPrinter();
     initializePage();
 });
-
-
-
-
-
-
