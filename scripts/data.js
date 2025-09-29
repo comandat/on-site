@@ -5,12 +5,12 @@ const DATA_FETCH_URL = 'https://automatizare.comandat.ro/webhook/5a447557-8d52-4
 const PRODUCT_DETAILS_URL = 'https://automatizare.comandat.ro/webhook/f1bb3c1c-3730-4672-b989-b3e73b911043';
 const STOCK_UPDATE_URL = 'https://automatizare.comandat.ro/webhook/4bef3762-2d4f-437d-a05c-001ccb597ab9';
 
-export const AppState = {
+const AppState = {
     getCommands: () => JSON.parse(sessionStorage.getItem('liveCommandsData') || '[]'),
     setCommands: (commands) => sessionStorage.setItem('liveCommandsData', JSON.stringify(commands))
 };
 
-export async function fetchDataAndSyncState() {
+async function fetchDataAndSyncState() {
     const accessCode = sessionStorage.getItem('lastAccessCode');
     if (!accessCode) return false;
 
@@ -24,10 +24,7 @@ export async function fetchDataAndSyncState() {
         
         const responseData = await response.json();
         
-        // =================================================================
-        // AICI ESTE MODIFICAREA: AFIȘEAZĂ RĂSPUNSUL BRUT ÎN CONSOLĂ
         console.log("RAW DATA RECEIVED FROM SERVER:", JSON.stringify(responseData.data, null, 2));
-        // =================================================================
 
         if (responseData.status !== 'success' || !responseData.data) throw new Error('Invalid data from server');
 
@@ -64,7 +61,7 @@ export async function fetchDataAndSyncState() {
     }
 }
 
-export async function sendStockUpdate(commandId, productAsin, stockDelta) {
+async function sendStockUpdate(commandId, productAsin, stockDelta) {
     const changes = [];
     for (const condition in stockDelta) {
         const value = stockDelta[condition];
@@ -101,7 +98,7 @@ export async function sendStockUpdate(commandId, productAsin, stockDelta) {
     }
 }
 
-export async function fetchProductDetailsInBulk(asins) {
+async function fetchProductDetailsInBulk(asins) {
     const results = {};
     const asinsToFetch = asins.filter(asin => !sessionStorage.getItem(`product_${asin}`));
 
