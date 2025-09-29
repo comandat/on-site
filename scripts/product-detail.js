@@ -47,26 +47,6 @@ document.addEventListener('DOMContentLoaded', () => {
         return new Uint8Array(packet);
     }
 
-    async function sendCommandAndWait(characteristic, packet, timeoutMs = 5000) {
-        return new Promise((resolve, reject) => {
-            const specificHandler = (event) => {
-                characteristic.removeEventListener('characteristicvaluechanged', specificHandler);
-                clearTimeout(timeout);
-                resolve(new Uint8Array(event.target.value.buffer));
-            };
-            characteristic.addEventListener('characteristicvaluechanged', specificHandler);
-            const timeout = setTimeout(() => {
-                characteristic.removeEventListener('characteristicvaluechanged', specificHandler);
-                reject(new Error(`Timeout: Imprimanta nu a răspuns în ${timeoutMs / 1000} secunde.`));
-            }, timeoutMs);
-            characteristic.writeValueWithoutResponse(packet).catch(err => {
-                characteristic.removeEventListener('characteristicvaluechanged', specificHandler);
-                clearTimeout(timeout);
-                reject(err);
-            });
-        });
-    }
-
  
     // --- START MODIFICARE: Funcție de conectare cu diagnosticare ---
     async function connectToPrinter(statusCallback) {
@@ -510,6 +490,7 @@ async function printLabel(productCode, conditionLabel, quantity = 1) {
     }
     initializePage();
 });
+
 
 
 
