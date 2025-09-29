@@ -1,11 +1,11 @@
 // scripts/product-detail.js
 import { AppState, fetchDataAndSyncState, sendStockUpdate, fetchProductDetailsInBulk } from './data.js';
-import { isPrinterConnected, connectToPrinter, printLabelQueue } from './printer-service.js';
+import { isPrinterConnected, connectToPrinter, printSingleLabel } from './printer-service.js';
 
 document.addEventListener('DOMContentLoaded', () => {
     let currentCommandId = null;
-    let currentProductId = null; // Acesta este productsku
-    let currentProduct = null;   // Acesta conține toate detaliile, inclusiv .asin
+    let currentProductId = null;
+    let currentProduct = null;
     let swiper = null;
 
     let stockStateAtModalOpen = {};
@@ -82,20 +82,33 @@ document.addEventListener('DOMContentLoaded', () => {
             renderPageContent();
 
             const conditionMap = { 'new': 'CN', 'very-good': 'FB', 'good': 'B' };
-            const queue = [];
+            const printQueue = [];
             for (const condition in delta) {
                 if (delta[condition] > 0 && conditionMap[condition]) {
                     for (let i = 0; i < delta[condition]; i++) {
-                        // --- MODIFICARE AICI: Forțăm conversia la String direct la creare ---
-                        queue.push({ code: String(productAsinForPrinting), conditionLabel: conditionMap[condition] });
+                        printQueue.push({ code: String(productAsinForPrinting), conditionLabel: conditionMap[condition] });
                     }
                 }
             }
             
             hideModal();
 
-            if (queue.length > 0) {
-                await printLabelQueue(queue, (status) => showToast(status, 4000));
+            // --- MODIFICARE AICI: Bucla de printare este acum aici ---
+            if (printQueue.length > 0) {
+                showToast(`Se inițiază imprimarea pentru ${printQueue.length} etichete...`);
+                for (let i = 0; i < printQueue.length; i++) {
+                    const item = printQueue[i];
+                    try {
+                        showToast(`Se printează ${i + 1} din ${printQueue.length}: ${item.code}${item.conditionLabel}`);
+                        await printSingleLabel(item.code, item.conditionLabel);
+                        await new Promise(res => setTimeout(res, 500)); // Pauză între printări
+                    } catch (e) {
+                        showToast(`Eroare la eticheta ${i + 1}. Procesul s-a oprit.`);
+                        console.error("Eroare la imprimarea etichetei:", e);
+                        return; // Oprim procesul dacă o etichetă eșuează
+                    }
+                }
+                showToast(`S-a finalizat imprimarea celor ${printQueue.length} etichete.`);
             }
 
         } else {
