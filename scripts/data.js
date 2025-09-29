@@ -5,13 +5,11 @@ const DATA_FETCH_URL = 'https://automatizare.comandat.ro/webhook/5a447557-8d52-4
 const PRODUCT_DETAILS_URL = 'https://automatizare.comandat.ro/webhook/f1bb3c1c-3730-4672-b989-b3e73b911043';
 const STOCK_UPDATE_URL = 'https://automatizare.comandat.ro/webhook/4bef3762-2d4f-437d-a05c-001ccb597ab9';
 
-// Am adăugat 'export' aici
 export const AppState = {
     getCommands: () => JSON.parse(sessionStorage.getItem('liveCommandsData') || '[]'),
     setCommands: (commands) => sessionStorage.setItem('liveCommandsData', JSON.stringify(commands))
 };
 
-// Am adăugat 'export' aici
 export async function fetchDataAndSyncState() {
     const accessCode = sessionStorage.getItem('lastAccessCode');
     if (!accessCode) return false;
@@ -63,7 +61,6 @@ export async function fetchDataAndSyncState() {
     }
 }
 
-// Am adăugat 'export' aici
 export async function sendStockUpdate(commandId, productAsin, stockDelta) {
     const changes = [];
     for (const condition in stockDelta) {
@@ -101,7 +98,6 @@ export async function sendStockUpdate(commandId, productAsin, stockDelta) {
     }
 }
 
-// Am adăugat 'export' aici
 export async function fetchProductDetailsInBulk(asins) {
     const results = {};
     const asinsToFetch = asins.filter(asin => !sessionStorage.getItem(`product_${asin}`));
@@ -123,7 +119,11 @@ export async function fetchProductDetailsInBulk(asins) {
         if (!response.ok) throw new Error(`Network response was not ok`);
         
         const responseData = await response.json();
-        const bulkData = responseData.products || (Array.isArray(responseData) && responseData[0]?.products) || {};
+        
+        // --- START CORECȚIE ---
+        // Logica a fost simplificată pentru a fi mai robustă la schimbările de format
+        const bulkData = responseData.products || responseData;
+        // --- FINAL CORECȚIE ---
 
         for (const asin of asinsToFetch) {
             const productData = bulkData[asin] || { title: 'Nume indisponibil', images: [] };
