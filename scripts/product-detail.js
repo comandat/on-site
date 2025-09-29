@@ -9,24 +9,27 @@ document.addEventListener('DOMContentLoaded', () => {
 
     let stockStateAtModalOpen = {};
     let stockStateInModal = {};
+    
+    // Variabilă pentru a gestiona apăsarea lungă
+    let pressTimer = null;
 
     const pageElements = {
         title: document.getElementById('product-detail-title'),
         expectedStock: document.getElementById('expected-stock'),
+        suggestedCondition: document.getElementById('suggested-condition'),
         totalFound: document.getElementById('total-found'),
         imageWrapper: document.getElementById('product-image-wrapper'),
         stockModal: document.getElementById('stock-modal'),
         openModalButton: document.getElementById('open-stock-modal-button')
     };
     
-    // Funcția care randează stocurile
     function renderStockLevels() {
-        const commands = AppState.getCommands();
-        const command = commands.find(c => c.id === currentCommandId);
+        const command = AppState.getCommands().find(c => c.id === currentCommandId);
         currentProduct = command ? command.products.find(p => p.id === currentProductId) : null;
         if (!currentProduct) return;
 
         pageElements.expectedStock.textContent = currentProduct.expected;
+        pageElements.suggestedCondition.textContent = currentProduct.suggestedcondition;
         pageElements.totalFound.textContent = currentProduct.found;
         for (const condition in currentProduct.state) {
             document.querySelector(`[data-summary="${condition}"]`).textContent = currentProduct.state[condition];
@@ -34,6 +37,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     async function handleSaveChanges() {
+        // ... (această funcție rămâne neschimbată)
         const saveButton = document.getElementById('save-btn');
         saveButton.disabled = true;
         saveButton.textContent = 'Se salvează...';
@@ -53,12 +57,9 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
         
-        // Pasul 1: Trimite la server și AȘTEAPTĂ confirmarea
         const success = await sendStockUpdate(currentCommandId, currentProductId, delta);
-        
         hideModal();
 
-        // Pasul 2: DOAR DUPĂ confirmare, cere datele noi
         if (success) {
             await fetchDataAndSyncState();
             renderStockLevels();
@@ -67,12 +68,9 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // ... (restul funcțiilor din product-detail.js: showModal, hideModal, etc. rămân neschimbate)
-    // Le includ aici pentru a fi complet.
-
     function showModal() {
-        const commands = AppState.getCommands();
-        const command = commands.find(c => c.id === currentCommandId);
+        // ... (această funcție rămâne neschimbată)
+        const command = AppState.getCommands().find(c => c.id === currentCommandId);
         currentProduct = command ? command.products.find(p => p.id === currentProductId) : null;
         if(!currentProduct) return;
         
@@ -104,31 +102,83 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function createCounter(id, label, value, isDanger = false) {
+        // Am înlocuit span-ul cu un input de tip number
         return `
             <div class="flex items-center justify-between py-3 border-b">
                 <span class="text-lg font-medium ${isDanger ? 'text-red-600' : 'text-gray-800'}">${label}</span>
                 <div class="flex items-center gap-3">
-                    <button data-action="minus" data-target="${id}" class="control-btn rounded-full bg-gray-200 w-8 h-8 flex items-center justify-center text-lg font-bold">-</button>
-                    <span id="count-${id}" class="text-xl font-bold w-8 text-center">${value}</span>
-                    <button data-action="plus" data-target="${id}" class="control-btn rounded-full bg-gray-200 w-8 h-8 flex items-center justify-center text-lg font-bold">+</button>
+                    <button data-action="minus" data-target="${id}" class="control-btn rounded-full bg-gray-200 w-8 h-8 flex items-center justify-center text-lg font-bold select-none">-</button>
+                    <input type="number" id="count-${id}" value="${value}" class="text-xl font-bold w-16 text-center border-gray-300 rounded-md shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50">
+                    <button data-action="plus" data-target="${id}" class="control-btn rounded-full bg-gray-200 w-8 h-8 flex items-center justify-center text-lg font-bold select-none">+</button>
                 </div>
             </div>`;
     }
+    
+    // Funcție pentru a actualiza valoarea în UI și în starea internă
+    function updateValue(target, newValue) {
+        newValue = Math.max(0, parseInt(newValue, 10) || 0); // Asigură-te că valoarea e un număr pozitiv
+        stockStateInModal[target] = newValue;
+        document.getElementById(`count-${target}`).value = newValue;
+    }
 
     function addModalEventListeners() {
+        // Logica pentru click pe butoane
         pageElements.stockModal.querySelectorAll('.control-btn').forEach(button => {
-            button.addEventListener('click', () => {
-                const target = button.dataset.target;
-                if (button.dataset.action === 'plus') stockStateInModal[target]++;
-                else if (stockStateInModal[target] > 0) stockStateInModal[target]--;
-                pageElements.stockModal.querySelector(`#count-${target}`).textContent = stockStateInModal[target];
+            const action = button.dataset.action;
+            const target = button.dataset.target;
+            
+            const startPress = (e) => {
+                e.preventDefault(); // Previne comportamente nedorite (ex: selectare text)
+                
+                // Setează un timer care se va declanșa după 3 secunde
+                pressTimer = setTimeout(() => {
+                    if (action === 'minus') {
+                        updateValue(target, 0);
+                    } else if (action === 'plus') {
+                        updateValue(target, currentProduct.expected);
+                    }
+                }, 3000); // 3000 milisecunde = 3 secunde
+            };
+            
+            const endPress = (e) => {
+                e.preventDefault();
+                // Anulează timer-ul dacă butonul este eliberat înainte de 3 secunde
+                clearTimeout(pressTimer);
+            };
+            
+            const shortClick = (e) => {
+                 e.preventDefault();
+                // Execută un click normal dacă a fost o apăsare scurtă
+                if (action === 'plus') {
+                    updateValue(target, stockStateInModal[target] + 1);
+                } else if (action === 'minus') {
+                    updateValue(target, stockStateInModal[target] - 1);
+                }
+            };
+
+            // Adaugă event listener-e pentru mouse și touch
+            button.addEventListener('mousedown', startPress);
+            button.addEventListener('mouseup', endPress);
+            button.addEventListener('mouseleave', endPress);
+            button.addEventListener('touchstart', startPress);
+            button.addEventListener('touchend', endPress);
+            button.addEventListener('click', shortClick);
+        });
+        
+        // Logica pentru modificarea manuală a input-ului
+        pageElements.stockModal.querySelectorAll('input[type="number"]').forEach(input => {
+            input.addEventListener('input', () => {
+                const target = input.id.replace('count-', '');
+                updateValue(target, input.value);
             });
         });
+        
         pageElements.stockModal.querySelector('#save-btn').addEventListener('click', handleSaveChanges);
         pageElements.stockModal.querySelector('#close-modal-btn').addEventListener('click', hideModal);
     }
     
     async function initializePage() {
+        // ... (restul funcției rămâne neschimbată)
         currentCommandId = sessionStorage.getItem('currentCommandId');
         currentProductId = sessionStorage.getItem('currentProductId');
         if (!currentCommandId || !currentProductId) {
@@ -136,11 +186,9 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        // Prima încărcare a datelor
         await fetchDataAndSyncState();
         
-        const commands = AppState.getCommands();
-        const command = commands.find(c => c.id === currentCommandId);
+        const command = AppState.getCommands().find(c => c.id === currentCommandId);
         currentProduct = command ? command.products.find(p => p.id === currentProductId) : null;
        
         if (!currentProduct) {
@@ -150,10 +198,25 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         renderStockLevels();
-        // ... (restul inițializării)
+        
         const details = await fetchProductDetailsInBulk([currentProduct.asin]);
-        pageElements.title.textContent = details[currentProduct.asin]?.title || 'Nume indisponibil';
-        // etc.
+        const productDetails = details[currentProduct.asin];
+        pageElements.title.textContent = productDetails?.title || 'Nume indisponibil';
+        const images = productDetails?.images || [];
+        pageElements.imageWrapper.innerHTML = '';
+        if (images.length === 0) {
+            pageElements.imageWrapper.innerHTML = `<div class="swiper-slide bg-gray-200 flex items-center justify-center"><span class="material-symbols-outlined text-gray-400 text-6xl">hide_image</span></div>`;
+        } else {
+            images.forEach(imageUrl => {
+                const slide = document.createElement('div');
+                slide.className = 'swiper-slide';
+                slide.style.backgroundImage = `url('${imageUrl}')`;
+                pageElements.imageWrapper.appendChild(slide);
+            });
+        }
+        if (swiper) swiper.update();
+        else swiper = new Swiper('#image-swiper-container', { pagination: { el: '.swiper-pagination' } });
+        
         pageElements.openModalButton.addEventListener('click', showModal);
     }
 
