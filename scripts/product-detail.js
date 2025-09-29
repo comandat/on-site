@@ -67,27 +67,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    async function getPrintStatus(expectedPage) {
-        if (!isPrinterConnected()) throw new Error("Imprimanta nu este conectată.");
-        for (let i = 0; i < 50; i++) { 
-            try {
-                // Protocolul vechi (niimprintx) pentru status
-                const statusPacket = createNiimbotPacket(0xA3, [1]); 
-                const response = await sendCommandAndWait(niimbotCharacteristic, statusPacket, 500);
-                if (response && response.length > 2) {
-                    const currentPage = response[2];
-                    if (currentPage === expectedPage) {
-                        return; 
-                    }
-                }
-            } catch (e) {
-                // Ignoră timeout și reîncearcă
-            }
-            await new Promise(res => setTimeout(res, 200));
-        }
-        throw new Error("Imprimanta nu a confirmat printarea paginii în timp util.");
-    }
-    
+ 
     // --- START MODIFICARE: Funcție de conectare cu diagnosticare ---
     async function connectToPrinter(statusCallback) {
         if (isPrinterConnected()) {
@@ -157,86 +137,88 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     // --- FINAL MODIFICARE ---
 
-    async function printLabel(productCode, conditionLabel, quantity = 1) {
-        if (!isPrinterConnected()) throw new Error("Imprimanta nu este conectată.");
+// scripts/product-detail.js
+
+async function printLabel(productCode, conditionLabel, quantity = 1) {
+    if (!isPrinterConnected()) throw new Error("Imprimanta nu este conectată.");
+    
+    const textToPrint = `${productCode}${conditionLabel}`;
+    try {
+        const labelWidth = 240;
+        const labelHeight = 120;
+        const canvas = document.createElement('canvas');
+        canvas.width = labelHeight;
+        canvas.height = labelWidth;
+        const ctx = canvas.getContext('2d');
         
-        const textToPrint = `${productCode}${conditionLabel}`;
-        try {
-            const labelWidth = 240;
-            const labelHeight = 120;
-            const canvas = document.createElement('canvas');
-            canvas.width = labelHeight;
-            canvas.height = labelWidth;
-            const ctx = canvas.getContext('2d');
-            
-            ctx.fillStyle = 'black';
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
-            ctx.save();
-            ctx.translate(canvas.width / 2, canvas.height / 2);
-            ctx.rotate(90 * Math.PI / 180);
-            const verticalOffset = 10;
-            
-            const qr = qrcode(0, 'M');
-            qr.addData(textToPrint);
-            qr.make();
-            const qrImg = new Image();
-            qrImg.src = qr.createDataURL(6, 2);
-            await new Promise(resolve => { qrImg.onload = resolve; });
-            
-            const qrSize = 85; 
-            ctx.drawImage(qrImg, -labelWidth / 2 + 15, -labelHeight / 2 + 18 + verticalOffset, qrSize, qrSize);
-            ctx.fillStyle = 'white';
-            ctx.font = 'bold 24px Arial';
-            ctx.textAlign = 'left';
-            ctx.textBaseline = 'middle';
-            const line1 = textToPrint.substring(0, 6);
-            const line2 = textToPrint.substring(6);
-            ctx.fillText(line1, -labelWidth / 2 + qrSize + 30, -15 + verticalOffset);
-            ctx.fillText(line2, -labelWidth / 2 + qrSize + 30, 15 + verticalOffset);
-            ctx.restore();
-            
-            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-            const imagePackets = [];
-            const widthInBytes = Math.ceil(canvas.width / 8);
-            for (let y = 0; y < canvas.height; y++) {
-                let lineBytes = new Uint8Array(widthInBytes);
-                for (let x = 0; x < canvas.width; x++) {
-                    const pixelIndex = (y * canvas.width + x) * 4;
-                    const pixelValue = imageData.data[pixelIndex] > 128 ? 1 : 0;
-                    if (pixelValue === 1) {
-                        lineBytes[Math.floor(x / 8)] |= (1 << (7 - (x % 8)));
-                    }
+        ctx.fillStyle = 'black';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.save();
+        ctx.translate(canvas.width / 2, canvas.height / 2);
+        ctx.rotate(90 * Math.PI / 180);
+        const verticalOffset = 10;
+        
+        const qr = qrcode(0, 'M');
+        qr.addData(textToPrint);
+        qr.make();
+        const qrImg = new Image();
+        qrImg.src = qr.createDataURL(6, 2);
+        await new Promise(resolve => { qrImg.onload = resolve; });
+        
+        const qrSize = 85; 
+        ctx.drawImage(qrImg, -labelWidth / 2 + 15, -labelHeight / 2 + 18 + verticalOffset, qrSize, qrSize);
+        ctx.fillStyle = 'white';
+        ctx.font = 'bold 24px Arial';
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'middle';
+        const line1 = textToPrint.substring(0, 6);
+        const line2 = textToPrint.substring(6);
+        ctx.fillText(line1, -labelWidth / 2 + qrSize + 30, -15 + verticalOffset);
+        ctx.fillText(line2, -labelWidth / 2 + qrSize + 30, 15 + verticalOffset);
+        ctx.restore();
+        
+        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        const imagePackets = [];
+        const widthInBytes = Math.ceil(canvas.width / 8);
+        for (let y = 0; y < canvas.height; y++) {
+            let lineBytes = new Uint8Array(widthInBytes);
+            for (let x = 0; x < canvas.width; x++) {
+                const pixelIndex = (y * canvas.width + x) * 4;
+                const pixelValue = imageData.data[pixelIndex] > 128 ? 1 : 0;
+                if (pixelValue === 1) {
+                    lineBytes[Math.floor(x / 8)] |= (1 << (7 - (x % 8)));
                 }
-                const header = [(y >> 8) & 0xFF, y & 0xFF, 0, 0, 0, 1];
-                const dataPayload = Array.from(new Uint8Array([...header, ...lineBytes]));
-                imagePackets.push(createNiimbotPacket(0x85, dataPayload));
             }
-
-            const write = (packet) => niimbotCharacteristic.writeValueWithoutResponse(packet);
-            const delay = ms => new Promise(res => setTimeout(res, ms));
-
-            await sendCommandAndWait(niimbotCharacteristic, createNiimbotPacket(0x21, [3]));
-            await sendCommandAndWait(niimbotCharacteristic, createNiimbotPacket(0x23, [1]));
-            await sendCommandAndWait(niimbotCharacteristic, createNiimbotPacket(0x01, [1]));
-            await sendCommandAndWait(niimbotCharacteristic, createNiimbotPacket(0x03, [1]));
-            
-            const dimensionData = [(canvas.height >> 8) & 0xFF, canvas.height & 0xFF, (canvas.width >> 8) & 0xFF, canvas.width & 0xFF];
-            await sendCommandAndWait(niimbotCharacteristic, createNiimbotPacket(0x13, dimensionData));
-            await sendCommandAndWait(niimbotCharacteristic, createNiimbotPacket(0x15, [0, quantity]));
-            
-            for (const packet of imagePackets) {
-                await write(packet);
-                await delay(20);
-            }
-
-            await sendCommandAndWait(niimbotCharacteristic, createNiimbotPacket(0xE3, [1]));
-            await getPrintStatus(quantity);
-            await sendCommandAndWait(niimbotCharacteristic, createNiimbotPacket(0xF3, [1]));
-        } catch (error) {
-            console.error(`Eroare critică la printarea etichetei: ${textToPrint}`, error);
-            throw error;
+            const header = [(y >> 8) & 0xFF, y & 0xFF, 0, 0, 0, 1];
+            const dataPayload = Array.from(new Uint8Array([...header, ...lineBytes]));
+            imagePackets.push(createNiimbotPacket(0x85, dataPayload));
         }
+
+        const write = (packet) => niimbotCharacteristic.writeValueWithoutResponse(packet);
+        const delay = ms => new Promise(res => setTimeout(res, ms));
+
+        await sendCommandAndWait(niimbotCharacteristic, createNiimbotPacket(0x21, [3]));
+        await sendCommandAndWait(niimbotCharacteristic, createNiimbotPacket(0x23, [1]));
+        await sendCommandAndWait(niimbotCharacteristic, createNiimbotPacket(0x01, [1]));
+        await sendCommandAndWait(niimbotCharacteristic, createNiimbotPacket(0x03, [1]));
+        
+        const dimensionData = [(canvas.height >> 8) & 0xFF, canvas.height & 0xFF, (canvas.width >> 8) & 0xFF, canvas.width & 0xFF];
+        await sendCommandAndWait(niimbotCharacteristic, createNiimbotPacket(0x13, dimensionData));
+        await sendCommandAndWait(niimbotCharacteristic, createNiimbotPacket(0x15, [0, quantity]));
+        
+        for (const packet of imagePackets) {
+            await write(packet);
+            await delay(20);
+        }
+
+        await sendCommandAndWait(niimbotCharacteristic, createNiimbotPacket(0xE3, [1]));
+        // AICI AM ELIMINAT: await getPrintStatus(quantity);
+        await sendCommandAndWait(niimbotCharacteristic, createNiimbotPacket(0xF3, [1]));
+    } catch (error) {
+        console.error(`Eroare critică la printarea etichetei: ${textToPrint}`, error);
+        throw error;
     }
+}
 
     function getLatestProductData() {
         const command = AppState.getCommands().find(c => c.id === currentCommandId);
@@ -517,3 +499,4 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     initializePage();
 });
+
