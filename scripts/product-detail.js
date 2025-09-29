@@ -169,7 +169,17 @@ document.addEventListener('DOMContentLoaded', () => {
             ctx.font = 'bold 30px Arial'; 
             ctx.textAlign = 'left';
             ctx.textBaseline = 'middle';
-            ctx.fillText(textToPrint, -labelWidth / 2 + qrSize + 30, 0 + verticalOffset);
+
+            // --- START MODIFICARE TEXT MULTILINIE ---
+            const line1 = textToPrint.substring(0, 6);
+            const line2 = textToPrint.substring(6);
+            
+            // Desenăm primul rând
+            ctx.fillText(line1, -labelWidth / 2 + qrSize + 30, -15 + verticalOffset);
+            // Desenăm al doilea rând, mai jos
+            ctx.fillText(line2, -labelWidth / 2 + qrSize + 30, 15 + verticalOffset);
+            // --- FINAL MODIFICARE TEXT MULTILINIE ---
+
             ctx.restore();
             
             const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
