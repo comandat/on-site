@@ -13,9 +13,6 @@ const AppState = {
 
 // --- FUNCȚII PUBLICE ---
 
-/**
- * Prelucrează datele brute de la server și le salvează în starea aplicației.
- */
 export async function fetchDataAndSyncState() {
     const accessCode = sessionStorage.getItem('lastAccessCode');
     if (!accessCode) return false;
@@ -31,24 +28,29 @@ export async function fetchDataAndSyncState() {
         const responseData = await response.json();
         if (responseData.status !== 'success' || !responseData.data) throw new Error('Invalid data from server');
 
-        // Transformă datele în formatul necesar
         const commands = Object.keys(responseData.data).map(commandId => {
             const products = responseData.data[commandId] || [];
             return {
                 id: commandId,
                 name: `Comanda #${commandId.substring(0, 12)}`,
-                products: products.map(p => ({
-                    id: p.productsku,
-                    asin: p.asin,
-                    expected: p.orderedquantity || 0,
-                    found: (p.bncondition || 0) + (p.vgcondition || 0) + (p.gcondition || 0) + (p.broken || 0),
-                    state: {
+                products: products.map(p => {
+                    const state = {
                         'new': p.bncondition || 0,
                         'very-good': p.vgcondition || 0,
                         'good': p.gcondition || 0,
                         'broken': p.broken || 0
-                    }
-                }))
+                    };
+                    const found = Object.values(state).reduce((sum, val) => sum + val, 0);
+                    return {
+                        id: p.productsku,
+                        asin: p.asin,
+                        expected: p.orderedquantity || 0,
+                        found: found,
+                        state: state,
+                        // Am adăugat câmpul nou aici
+                        suggestedcondition: p.suggestedcondition || 'N/A' 
+                    };
+                })
             };
         });
         
@@ -60,48 +62,44 @@ export async function fetchDataAndSyncState() {
     }
 }
 
-/**
- * Trimite o actualizare de stoc (delta) la server.
- * @param {string} commandId - ID-ul comenzii (și numele tabelei)
- * @param {string} productId - SKU-ul produsului
- * @param {object} stockDelta - Obiect cu modificările. Ex: { "new": 3, "good": -1 }
- */
 export async function sendStockUpdate(commandId, productId, stockDelta) {
-    // Trimitem un payload pentru fiecare modificare în parte
+    const changes = [];
     for (const condition in stockDelta) {
         const value = stockDelta[condition];
-        if (value === 0) continue; // Nu trimitem modificări nule
-
-        const payload = {
-            orderId: commandId,
-            productSku: productId,
-            condition: condition,
-            changeValue: value
-        };
-
-        try {
-            const response = await fetch(STOCK_UPDATE_URL, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
+        if (value !== 0) {
+            changes.push({
+                condition: condition,
+                changeValue: value
             });
-            if (!response.ok) {
-                 console.error(`Failed to update ${condition}:`, await response.text());
-                 return false; // Oprește procesul la prima eroare
-            }
-        } catch (error) {
-            console.error('Network error during stock update:', error);
-            return false;
         }
     }
-    return true; // Toate modificările au fost trimise cu succes
+
+    if (changes.length === 0) return true;
+
+    const payload = {
+        orderId: commandId,
+        productSku: productId,
+        changes: changes
+    };
+
+    try {
+        const response = await fetch(STOCK_UPDATE_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        if (!response.ok) {
+             console.error(`Failed to update stock:`, await response.text());
+             return false;
+        }
+        return true;
+    } catch (error) {
+        console.error('Network error during stock update:', error);
+        return false;
+    }
 }
 
-/**
- * Prelucrează detaliile (nume, imagini) pentru o listă de ASIN-uri.
- */
 export async function fetchProductDetailsInBulk(asins) {
-    // ... (această funcție rămâne neschimbată)
     const results = {};
     const asinsToFetch = asins.filter(asin => !sessionStorage.getItem(`product_${asin}`));
 
@@ -130,7 +128,7 @@ export async function fetchProductDetailsInBulk(asins) {
             results[asin] = productData;
         }
     } catch (error) {
-        console.error('Eroare la preluarea detaliilor produselor:', error);
+        console.error('Eroare la preluarea detaliilor produselor (bulk):', error);
         for (const asin of asinsToFetch) {
             results[asin] = { title: 'Eroare la încărcare', images: [] };
         }
