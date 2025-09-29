@@ -8,7 +8,6 @@
     <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet"/>
     <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
     <link rel="stylesheet" href="style.css">
-    <script src="https://unpkg.com/qrcode-generator@1.0.1/qrcode.js"></script> 
     <script src="scripts/auth.js"></script>
     <style>
         .dot { height: 10px; width: 10px; border-radius: 50%; display: inline-block; }
@@ -38,11 +37,7 @@
                         <span class="material-symbols-outlined">bluetooth_searching</span>
                         Caută Imprimantă
                     </button>
-                    <button id="print-btn" disabled class="w-full flex items-center justify-center gap-2 rounded-lg bg-gray-300 py-3 text-base font-bold text-white shadow-md cursor-not-allowed">
-                        <span class="material-symbols-outlined">label_print</span>
-                        Imprimă Etichetele
-                    </button>
-                    <div class="mt-2 flex items-center justify-center gap-2">
+                    <div class="mt-2 flex items-center justify-center gap-2 pt-2">
                         <span id="connection-dot" class="dot bg-gray-400"></span>
                         <span id="connection-text" class="text-xs text-gray-500">Deconectat</span>
                     </div>
@@ -53,7 +48,7 @@
 
     <footer class="border-t border-gray-200 bg-white">
         <div class="mx-auto flex max-w-md justify-around">
-            <a href="index.html" class="flex flex-col items-center gap-1 p-2 text-gray-500 hover:text-[var(--primary-color)]">
+            <a href="main.html" class="flex flex-col items-center gap-1 p-2 text-gray-500 hover:text-[var(--primary-color)]">
                 <span class="material-symbols-outlined">apps</span>
                 <span class="text-xs">Comenzi</span>
             </a>
@@ -69,7 +64,7 @@
     </footer>
 </div>
 
-<script src="scripts/printer.js"></script>
+<script src="scripts/printer.js" type="module"></script>
 
 </body>
 </html>
