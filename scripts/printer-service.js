@@ -210,4 +210,17 @@ export async function printLabelQueue(queue, statusCallback) {
     
     if (statusCallback) statusCallback(`Se inițiază imprimarea pentru ${queue.length} etichete...`);
     
-    for (let i = 0; i
+    for (let i = 0; i < queue.length; i++) {
+        const { code, conditionLabel } = queue[i];
+        try {
+            if (statusCallback) statusCallback(`Se printează ${i + 1} din ${queue.length}: ${code}${conditionLabel}`);
+            await printSingleLabel(code, conditionLabel, null); // Nu pasam statusCallback la functia individuala
+            await new Promise(res => setTimeout(res, 500)); 
+        } catch (e) {
+            console.error("Eroare la imprimarea etichetei:", e);
+             if (statusCallback) statusCallback(`Eroare la eticheta ${i + 1}. Procesul s-a oprit.`);
+            return;
+        }
+    }
+    if (statusCallback) statusCallback(`S-a finalizat imprimarea celor ${queue.length} etichete.`);
+}
