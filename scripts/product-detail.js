@@ -1,4 +1,4 @@
-// scripts/product-detail.js
+// comandat/on-site/on-site-main/scripts/product-detail.js
 import { AppState, fetchDataAndSyncState, sendStockUpdate, fetchProductDetailsInBulk } from './data.js';
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -12,6 +12,9 @@ document.addEventListener('DOMContentLoaded', () => {
     let pressTimer = null;
     let clickHandler = null;
 
+    let allProducts = []; // NOU: Toate produsele din toate comenzile
+    let allProductDetails = {}; // NOU: Detalii (titlu, imagini) pentru toate produsele
+
     const pageElements = {
         title: document.getElementById('product-detail-title'),
         expectedStock: document.getElementById('expected-stock'),
@@ -19,7 +22,15 @@ document.addEventListener('DOMContentLoaded', () => {
         totalFound: document.getElementById('total-found'),
         imageWrapper: document.getElementById('product-image-wrapper'),
         stockModal: document.getElementById('stock-modal'),
-        openModalButton: document.getElementById('open-stock-modal-button')
+        openModalButton: document.getElementById('open-stock-modal-button'),
+        
+        // NOU: Elemente de căutare
+        searchOverlay: document.getElementById('search-overlay'),
+        searchTriggerHeader: document.getElementById('search-trigger-button'),
+        searchTriggerFooter: document.getElementById('footer-search-trigger'),
+        closeSearchButton: document.getElementById('close-search-button'),
+        searchInput: document.getElementById('search-input'),
+        searchResultsContainer: document.getElementById('search-results-container'),
     };
 
     function getLatestProductData() {
@@ -65,7 +76,6 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        // AICI ESTE CORECTURA: Trimitem currentProduct.asin, nu currentProductId
         const success = await sendStockUpdate(currentCommandId, currentProduct.asin, delta);
         hideModal();
 
@@ -77,7 +87,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
     
-    // ... restul funcțiilor (showModal, hideModal, etc.) rămân neschimbate
+    // ... (restul funcțiilor showModal, hideModal, createCounter, updateValue, addModalEventListeners rămân neschimbate) ...
     function showModal() {
         currentProduct = getLatestProductData();
         if (!currentProduct) return;
@@ -164,23 +174,160 @@ document.addEventListener('DOMContentLoaded', () => {
         pageElements.stockModal.querySelector('#save-btn').addEventListener('click', handleSaveChanges);
         pageElements.stockModal.querySelector('#close-modal-btn').addEventListener('click', hideModal);
     }
+    // ... (Sfârșitul funcțiilor neschimbate) ...
+
+
+    // NOU: Funcții pentru Căutare
+
+    function openSearch() {
+        document.body.classList.add('overflow-hidden');
+        pageElements.searchOverlay.classList.remove('hidden');
+        pageElements.searchInput.focus();
+    }
+
+    function closeSearch() {
+        document.body.classList.remove('overflow-hidden');
+        pageElements.searchOverlay.classList.add('hidden');
+        pageElements.searchInput.value = '';
+        pageElements.searchResultsContainer.innerHTML = '';
+    }
+
+    function navigateToProduct(commandId, productId) {
+        sessionStorage.setItem('currentCommandId', commandId);
+        sessionStorage.setItem('currentProductId', productId);
+        window.location.href = 'product-detail.html';
+    }
+
+    function renderSearchResults(results) {
+        pageElements.searchResultsContainer.innerHTML = '';
+        if (results.length === 0) {
+            pageElements.searchResultsContainer.innerHTML = '<p class="p-4 text-center text-gray-500">Niciun rezultat găsit. Încercați cu alte cuvinte cheie (Titlu, ASIN sau SKU).</p>';
+            return;
+        }
+
+        results.forEach(product => {
+            const details = allProductDetails[product.asin] || { title: 'Nume indisponibil', images: [] };
+            const productName = details?.title || 'Nume indisponibil';
+            const imageUrl = details?.images?.[0] || '';
+
+            const resultEl = document.createElement('a');
+            resultEl.href = '#';
+            resultEl.className = 'flex items-center gap-4 bg-white p-4 transition-colors hover:bg-gray-50';
+            
+            resultEl.innerHTML = `
+                <img alt="${productName}" class="h-14 w-14 rounded-md object-cover bg-gray-200" src="${imageUrl}" />
+                <div class="flex-1">
+                    <p class="font-medium text-gray-900 line-clamp-2">${productName}</p>
+                    <p class="text-sm text-gray-500">ASIN: ${product.asin} | SKU: ${product.id} | Comanda: ${product.commandName}</p>
+                    <p class="text-sm text-gray-500">${product.found} din ${product.expected}</p>
+                </div>`;
+
+            resultEl.addEventListener('click', (event) => {
+                event.preventDefault();
+                navigateToProduct(product.commandId, product.id);
+            });
+            pageElements.searchResultsContainer.appendChild(resultEl);
+        });
+    }
+
+    // Funcție simplă de normalizare pentru o căutare "fuzzy"
+    function normalizeText(text) {
+        if (!text) return '';
+        // Elimină diacritice, trece la minuscule și elimină caractere non-alphanumerice
+        return text.toLowerCase()
+                   .normalize("NFD")
+                   .replace(/[\u0300-\u036f]/g, "")
+                   .replace(/[^a-z0-9]/g, ''); 
+    }
+
+    function performSearch(query) {
+        const normalizedQuery = normalizeText(query);
+        if (normalizedQuery.length < 2) {
+            pageElements.searchResultsContainer.innerHTML = '<p class="p-4 text-center text-gray-500">Introduceți cel puțin 2 caractere pentru a căuta.</p>';
+            return;
+        }
+
+        const results = allProducts.filter(product => {
+            const details = allProductDetails[product.asin] || {};
+            const title = normalizeText(details.title);
+            const asin = normalizeText(product.asin);
+            const sku = normalizeText(product.id);
+
+            // Căutare parțială (conține) pe titlu, ASIN sau SKU
+            return title.includes(normalizedQuery) || 
+                   asin.includes(normalizedQuery) || 
+                   sku.includes(normalizedQuery);
+        });
+
+        renderSearchResults(results);
+    }
+    
+    async function setupSearchLogic() {
+        await fetchDataAndSyncState();
+        const commands = AppState.getCommands();
+        const allAsins = new Set();
+        allProducts = [];
+
+        commands.forEach(command => {
+            command.products.forEach(product => {
+                // Adaugă informațiile comenzii la produs pentru navigare
+                allProducts.push({
+                    ...product, 
+                    commandId: command.id,
+                    commandName: command.name.replace('Comanda #', '')
+                });
+                allAsins.add(product.asin);
+            });
+        });
+        
+        // Pre-încarcă toate detaliile produselor pentru căutare rapidă
+        allProductDetails = await fetchProductDetailsInBulk(Array.from(allAsins));
+        
+        // Adaugă Event Listeners pentru căutare
+        if (pageElements.searchTriggerHeader) pageElements.searchTriggerHeader.addEventListener('click', openSearch);
+        if (pageElements.searchTriggerFooter) pageElements.searchTriggerFooter.addEventListener('click', openSearch);
+        if (pageElements.closeSearchButton) pageElements.closeSearchButton.addEventListener('click', closeSearch);
+        if (pageElements.searchInput) {
+            pageElements.searchInput.addEventListener('input', () => {
+                performSearch(pageElements.searchInput.value);
+            });
+        }
+        
+        // Verifică dacă pagina a fost redirecționată pentru căutare
+        const urlParams = new URLSearchParams(window.location.search);
+        if (urlParams.get('search') === 'true') {
+            openSearch();
+        }
+    }
+
+
     async function initializePage() {
         currentCommandId = sessionStorage.getItem('currentCommandId');
         currentProductId = sessionStorage.getItem('currentProductId');
+        
+        // Setează logica de căutare întotdeauna
+        await setupSearchLogic();
+
+        // Continuă cu randarea paginii de detaliu doar dacă avem context de produs
         if (!currentCommandId || !currentProductId) {
-            window.location.href = 'main.html';
-            return;
+             // Dacă suntem pe product-detail.html fără context (dar nu pentru căutare), redirecționăm
+             if (window.location.search.indexOf('search') === -1) {
+                window.location.href = 'main.html';
+             }
+             return;
         }
-        await fetchDataAndSyncState();
+
         currentProduct = getLatestProductData();
         if (!currentProduct) {
             alert('Produsul nu a fost gasit');
             window.location.href = 'products.html';
             return;
         }
+
         renderPageContent();
-        const details = await fetchProductDetailsInBulk([currentProduct.asin]);
-        const productDetails = details[currentProduct.asin];
+
+        const productDetails = allProductDetails[currentProduct.asin]; 
+
         pageElements.title.textContent = productDetails?.title || 'Nume indisponibil';
         const images = productDetails?.images || [];
         pageElements.imageWrapper.innerHTML = '';
@@ -194,12 +341,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 pageElements.imageWrapper.appendChild(slide);
             });
         }
-        if (swiper) { 
-            swiper.update();
-        } else {
-            swiper = new Swiper('#image-swiper-container', { pagination: { el: '.swiper-pagination' } });
-        }
+        if (swiper) swiper.update();
+        else swiper = new Swiper('#image-swiper-container', { pagination: { el: '.swiper-pagination' } });
+
         pageElements.openModalButton.addEventListener('click', showModal);
     }
+    
     initializePage();
 });
