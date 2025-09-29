@@ -1,11 +1,11 @@
 // scripts/product-detail.js
 import { AppState, fetchDataAndSyncState, sendStockUpdate, fetchProductDetailsInBulk } from './data.js';
-import { isPrinterConnected, connectToPrinter, printLabelQueue } from './printer-service.js';
+import { hasPreviouslyConnectedDevice, printLabelQueue } from './printer-service.js';
 
 document.addEventListener('DOMContentLoaded', () => {
     let currentCommandId = null;
-    let currentProductId = null; // Acesta este productsku
-    let currentProduct = null;   // Acesta conține toate detaliile, inclusiv .asin
+    let currentProductId = null;
+    let currentProduct = null;
     let swiper = null;
 
     let stockStateAtModalOpen = {};
@@ -23,11 +23,15 @@ document.addEventListener('DOMContentLoaded', () => {
         openModalButton: document.getElementById('open-stock-modal-button')
     };
 
-    function showToast(message, duration = 3000) {
+    function showToast(message, duration = 4000) {
+        // Elimina orice toast existent
+        document.querySelectorAll('.toast-notification').forEach(t => t.remove());
+
         const toast = document.createElement('div');
         toast.textContent = message;
-        toast.className = 'fixed bottom-5 left-1/2 -translate-x-1/2 bg-gray-800 text-white px-4 py-2 rounded-lg shadow-lg z-50';
+        toast.className = 'toast-notification fixed bottom-5 left-1/2 -translate-x-1/2 bg-gray-800 text-white px-4 py-2 rounded-lg shadow-lg z-50';
         document.body.appendChild(toast);
+
         setTimeout(() => {
             toast.remove();
         }, duration);
@@ -91,7 +95,8 @@ document.addEventListener('DOMContentLoaded', () => {
             hideModal();
 
             if (queue.length > 0) {
-                await printLabelQueue(queue, (status) => showToast(status, 4000));
+                // Apelam direct functia de printare, care va gestiona (re)conectarea
+                await printLabelQueue(queue, showToast);
             }
 
         } else {
@@ -152,6 +157,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function addModalEventListeners() {
+        // ... (restul functiei ramane neschimbat)
         pageElements.stockModal.querySelectorAll('.control-btn').forEach(button => {
             const action = button.dataset.action;
             const target = button.dataset.target;
@@ -223,13 +229,21 @@ document.addEventListener('DOMContentLoaded', () => {
         else swiper = new Swiper('#image-swiper-container', { pagination: { el: '.swiper-pagination' } });
         
         pageElements.openModalButton.addEventListener('click', () => {
-            if (!isPrinterConnected()) {
-                sessionStorage.setItem('redirectAfterPrint', window.location.href);
+            // Verificam doar daca a existat o conexiune anterioara.
+            // Daca nu, redirectionam. Daca da, lasam serviciul sa se ocupe de reconectare.
+            if (!hasPreviouslyConnectedDevice()) {
                 window.location.href = 'printer.html';
             } else {
                 showModal();
             }
         });
+
+        // Adaugam <script> pentru qrcode in head pentru a fi disponibil global
+        if (!document.querySelector('script[src*="qrcode.js"]')) {
+            const qrScript = document.createElement('script');
+            qrScript.src = "https://unpkg.com/qrcode-generator@1.0.1/qrcode.js";
+            document.head.appendChild(qrScript);
+        }
     }
     initializePage();
 });
