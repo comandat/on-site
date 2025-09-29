@@ -139,12 +139,20 @@ document.addEventListener('DOMContentLoaded', () => {
 
 // scripts/product-detail.js
 
-// scripts/product-detail.js
+// --- START: ÎNLOCUIRE COMPLETĂ A FUNCȚIEI printLabel ---
+// (Asigurați-vă că ați șters vechea funcție sendCommandAndWait)
 
 async function printLabel(productCode, conditionLabel, quantity = 1) {
     if (!isPrinterConnected()) throw new Error("Imprimanta nu este conectată.");
-    
+
     const textToPrint = `${productCode}${conditionLabel}`;
+    
+    // Funcție ajutătoare pentru a trimite o comandă și a aștepta puțin
+    const writeAndDelay = async (packet, ms = 40) => {
+        await niimbotCharacteristic.writeValueWithoutResponse(packet);
+        await new Promise(res => setTimeout(res, ms));
+    };
+
     try {
         const labelWidth = 240;
         const labelHeight = 120;
@@ -153,6 +161,7 @@ async function printLabel(productCode, conditionLabel, quantity = 1) {
         canvas.height = labelWidth;
         const ctx = canvas.getContext('2d');
         
+        // --- Generare imagine pe canvas (cod neschimbat) ---
         ctx.fillStyle = 'black';
         ctx.fillRect(0, 0, canvas.width, canvas.height);
         ctx.save();
@@ -196,31 +205,31 @@ async function printLabel(productCode, conditionLabel, quantity = 1) {
             imagePackets.push(createNiimbotPacket(0x85, dataPayload));
         }
 
-        const write = (packet) => niimbotCharacteristic.writeValueWithoutResponse(packet);
-        const delay = ms => new Promise(res => setTimeout(res, ms));
-
-        await sendCommandAndWait(niimbotCharacteristic, createNiimbotPacket(0x21, [3]));
-        await sendCommandAndWait(niimbotCharacteristic, createNiimbotPacket(0x23, [1]));
-        await sendCommandAndWait(niimbotCharacteristic, createNiimbotPacket(0x01, [1]));
-        await sendCommandAndWait(niimbotCharacteristic, createNiimbotPacket(0x03, [1]));
+        // --- Trimitere comenzi către imprimantă (cod SIMPLIFICAT) ---
+        await writeAndDelay(createNiimbotPacket(0x21, [3]));
+        await writeAndDelay(createNiimbotPacket(0x23, [1]));
+        await writeAndDelay(createNiimbotPacket(0x01, [1]));
+        await writeAndDelay(createNiimbotPacket(0x03, [1]));
         
         const dimensionData = [(canvas.height >> 8) & 0xFF, canvas.height & 0xFF, (canvas.width >> 8) & 0xFF, canvas.width & 0xFF];
-        await sendCommandAndWait(niimbotCharacteristic, createNiimbotPacket(0x13, dimensionData));
-        await sendCommandAndWait(niimbotCharacteristic, createNiimbotPacket(0x15, [0, quantity]));
+        await writeAndDelay(createNiimbotPacket(0x13, dimensionData));
+        await writeAndDelay(createNiimbotPacket(0x15, [0, quantity]));
         
         for (const packet of imagePackets) {
-            await write(packet);
-            await delay(20);
+            // Pauză mai mică pentru pachetele de imagine
+            await writeAndDelay(packet, 20); 
         }
 
-        await sendCommandAndWait(niimbotCharacteristic, createNiimbotPacket(0xE3, [1]));
-        // LINIa CARE CAUZA EROAREA A FOST ELIMINATĂ DE AICI
-        await sendCommandAndWait(niimbotCharacteristic, createNiimbotPacket(0xF3, [1]));
+        await writeAndDelay(createNiimbotPacket(0xE3, [1]));
+        await writeAndDelay(createNiimbotPacket(0xF3, [1]));
+
     } catch (error) {
         console.error(`Eroare critică la printarea etichetei: ${textToPrint}`, error);
         throw error;
     }
 }
+
+// --- FINAL: ÎNLOCUIRE COMPLETĂ ---
 
     function getLatestProductData() {
         const command = AppState.getCommands().find(c => c.id === currentCommandId);
@@ -501,5 +510,6 @@ async function printLabel(productCode, conditionLabel, quantity = 1) {
     }
     initializePage();
 });
+
 
 
