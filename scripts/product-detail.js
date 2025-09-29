@@ -56,11 +56,7 @@ document.addEventListener('DOMContentLoaded', () => {
         saveButton.disabled = true;
         saveButton.textContent = 'Se salvează...';
 
-        // --- ADAUGAT PENTRU DIAGNOSTICARE ---
-        console.log("Produsul curent la momentul salvării:", currentProduct);
         const productAsinForPrinting = currentProduct.asin;
-        console.log("ASIN capturat pentru printare:", productAsinForPrinting);
-        // --- FINAL DIAGNOSTICARE ---
 
         const delta = {};
         let hasChanges = false;
@@ -85,24 +81,17 @@ document.addEventListener('DOMContentLoaded', () => {
             await fetchDataAndSyncState();
             renderPageContent();
 
-            // --- ADAUGAT PENTRU DIAGNOSTICARE ---
-            console.log("Creare coadă de printare folosind ASIN:", productAsinForPrinting);
-            // --- FINAL DIAGNOSTICARE ---
-
             const conditionMap = { 'new': 'CN', 'very-good': 'FB', 'good': 'B' };
             const queue = [];
             for (const condition in delta) {
                 if (delta[condition] > 0 && conditionMap[condition]) {
                     for (let i = 0; i < delta[condition]; i++) {
-                        queue.push({ code: productAsinForPrinting, conditionLabel: conditionMap[condition] });
+                        // --- MODIFICARE AICI: Forțăm conversia la String direct la creare ---
+                        queue.push({ code: String(productAsinForPrinting), conditionLabel: conditionMap[condition] });
                     }
                 }
             }
             
-            // --- ADAUGAT PENTRU DIAGNOSTICARE ---
-            console.log("Coada de printare finală trimisă către serviciu:", queue);
-            // --- FINAL DIAGNOSTICARE ---
-
             hideModal();
 
             if (queue.length > 0) {
