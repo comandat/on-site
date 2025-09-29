@@ -1,5 +1,8 @@
 // scripts/printer-service.js
 
+// --- MODIFICARE: Am importat o bibliotecă QR modernă ---
+import QRCode from 'https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.mjs';
+
 let niimbotCharacteristic = null;
 let isConnecting = false;
 let responseResolver = null;
@@ -106,7 +109,6 @@ export async function connectToPrinter(statusCallback) {
     }
 }
 
-// --- MODIFICARE: Am păstrat doar funcția de printare singulară ---
 export async function printSingleLabel(productCode, conditionLabel) {
     if (!isPrinterConnected()) {
         throw new Error("Imprimanta nu este conectată.");
@@ -129,17 +131,17 @@ export async function printSingleLabel(productCode, conditionLabel) {
         ctx.rotate(90 * Math.PI / 180);
         const verticalOffset = 10;
         
-        // Asigură că funcția `qrcode` este disponibilă
-        if (typeof qrcode === 'undefined') {
-            throw new Error('Biblioteca qrcode.js nu este încărcată.');
-        }
-        
-        const qr = qrcode(0, 'M');
-        qr.addData(textToPrint);
-        qr.make();
+        // --- MODIFICARE: Folosim noua bibliotecă. Este asincronă și mult mai stabilă. ---
         const qrImg = new Image();
-        qrImg.src = qr.createDataURL(6, 2);
-        await new Promise(resolve => { qrImg.onload = resolve; });
+        qrImg.src = await QRCode.toDataURL(textToPrint, { 
+            errorCorrectionLevel: 'M', 
+            margin: 2, 
+            scale: 6 
+        });
+        await new Promise((resolve, reject) => {
+            qrImg.onload = resolve;
+            qrImg.onerror = reject;
+        });
         
         const qrSize = 85; 
         ctx.drawImage(qrImg, -labelWidth / 2 + 15, -labelHeight / 2 + 18 + verticalOffset, qrSize, qrSize);
