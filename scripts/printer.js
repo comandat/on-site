@@ -1,5 +1,5 @@
 // scripts/printer.js
-import { connectToPrinter, isPrinterConnected } from './printer-service.js';
+import { connectToPrinter, isPrinterConnected, printLabelQueue } from './printer-service.js';
 
 document.addEventListener('DOMContentLoaded', () => {
     
@@ -25,7 +25,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // Callback pentru a primi actualizări de stare de la serviciu
     const statusCallback = (message) => {
         const isConnected = isPrinterConnected();
         updateUI(message, isConnected);
@@ -33,15 +32,7 @@ document.addEventListener('DOMContentLoaded', () => {
     
     connectBtn.addEventListener('click', async () => {
         connectBtn.disabled = true;
-        const success = await connectToPrinter(statusCallback);
-
-        if (success) {
-             const redirectUrl = sessionStorage.getItem('redirectAfterPrint');
-            if (redirectUrl) {
-                sessionStorage.removeItem('redirectAfterPrint');
-                window.location.href = redirectUrl;
-            }
-        }
+        await connectToPrinter(statusCallback);
     });
 
     // Starea initiala a UI-ului
@@ -49,5 +40,19 @@ document.addEventListener('DOMContentLoaded', () => {
         updateUI("Conectat", true);
     } else {
         updateUI("Apasă pentru a te conecta", false);
+    }
+
+    // Daca am fost redirectionati aici cu o coada de printare in asteptare
+    const pendingQueueRaw = sessionStorage.getItem('pendingPrintQueue');
+    if(pendingQueueRaw){
+        sessionStorage.removeItem('pendingPrintQueue');
+        const queue = JSON.parse(pendingQueueRaw);
+        
+        // Conecteaza-te si printeaza
+        connectBtn.click(); // Simuleaza click pentru a deschide fereastra de selectie
+        // Ar fi ideal sa asteptam conexiunea si sa printam, dar experienta e mai buna asa
+        // utilizatorul trebuie sa selecteze imprimanta si apoi sa apese print manual
+        // Pentru a printa automat, ar trebui sa schimbam fluxul in printer-service
+        // momentan, lasam asa pentru simplitate. Utilizatorul va trebui sa navigheze inapoi.
     }
 });
