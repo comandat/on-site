@@ -205,6 +205,33 @@ document.addEventListener('DOMContentLoaded', () => {
             if (element) element.textContent = currentProduct.state[condition];
         }
     }
+    
+    async function renderProductDetails(productAsin) {
+        pageElements.title.textContent = 'Se încarcă...';
+        const details = await fetchProductDetailsInBulk([productAsin]);
+        const productDetails = details[productAsin];
+
+        pageElements.title.textContent = productDetails?.title || 'Nume indisponibil';
+        const images = productDetails?.images || [];
+        pageElements.imageWrapper.innerHTML = '';
+
+        if (images.length === 0) {
+            pageElements.imageWrapper.innerHTML = `<div class="swiper-slide bg-gray-200 flex items-center justify-center"><span class="material-symbols-outlined text-gray-400 text-6xl">hide_image</span></div>`;
+        } else {
+            images.forEach(imageUrl => {
+                const slide = document.createElement('div');
+                slide.className = 'swiper-slide';
+                slide.style.backgroundImage = `url('${imageUrl}')`;
+                pageElements.imageWrapper.appendChild(slide);
+            });
+        }
+        
+        if (swiper) {
+            swiper.update();
+        } else {
+            swiper = new Swiper('#image-swiper-container', { pagination: { el: '.swiper-pagination' } });
+        }
+    }
 
     async function handleSaveChanges() {
         const saveButton = document.getElementById('save-btn');
@@ -438,23 +465,7 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
         renderPageContent();
-        const details = await fetchProductDetailsInBulk([currentProduct.asin]);
-        const productDetails = details[currentProduct.asin];
-        pageElements.title.textContent = productDetails?.title || 'Nume indisponibil';
-        const images = productDetails?.images || [];
-        pageElements.imageWrapper.innerHTML = '';
-        if (images.length === 0) {
-            pageElements.imageWrapper.innerHTML = `<div class="swiper-slide bg-gray-200 flex items-center justify-center"><span class="material-symbols-outlined text-gray-400 text-6xl">hide_image</span></div>`;
-        } else {
-            images.forEach(imageUrl => {
-                const slide = document.createElement('div');
-                slide.className = 'swiper-slide';
-                slide.style.backgroundImage = `url('${imageUrl}')`;
-                pageElements.imageWrapper.appendChild(slide);
-            });
-        }
-        if (swiper) swiper.update();
-        else swiper = new Swiper('#image-swiper-container', { pagination: { el: '.swiper-pagination' } });
+        await renderProductDetails(currentProduct.asin);
         
         const openModalFlow = () => {
             if (!isPrinterConnected()) {
@@ -490,12 +501,21 @@ document.addEventListener('DOMContentLoaded', () => {
                     const responseData = await response.json();
 
                     if (response.ok && responseData.status === 'success') {
-                        showToast('ASIN-ul a fost trimis cu succes!');
-                        await fetchDataAndSyncState(); // Reîmprospătare date
-                        renderPageContent(); // Re-randare conținut pagină
+                        showToast('Datele au fost actualizate!');
+                        
+                        // Ștergem detaliile vechi din cache
+                        sessionStorage.removeItem(`product_${currentProduct.asin}`);
+                        
+                        // Reîmprospătăm datele (stoc, etc.)
+                        await fetchDataAndSyncState(); 
+                        renderPageContent();
+                        
+                        // Reîmprospătăm detaliile vizuale (titlu, imagini)
+                        await renderProductDetails(currentProduct.asin);
+                        
                     } else {
                         const errorMessage = responseData.message || 'Eroare necunoscută.';
-                        showToast(`Eroare la trimiterea ASIN-ului: ${errorMessage}`, 5000);
+                        showToast(`Eroare: ${errorMessage}`, 5000);
                     }
                 } catch (error) {
                     showToast('Eroare de rețea. Vă rugăm încercați din nou.', 5000);
