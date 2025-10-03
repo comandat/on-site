@@ -487,11 +487,15 @@ document.addEventListener('DOMContentLoaded', () => {
                         body: JSON.stringify({ asin: currentProduct.asin }),
                     });
 
-                    if (response.ok) {
+                    const responseData = await response.json();
+
+                    if (response.ok && responseData.status === 'success') {
                         showToast('ASIN-ul a fost trimis cu succes!');
+                        await fetchDataAndSyncState(); // Reîmprospătare date
+                        renderPageContent(); // Re-randare conținut pagină
                     } else {
-                        const errorData = await response.text();
-                        showToast(`Eroare la trimiterea ASIN-ului: ${errorData}`, 5000);
+                        const errorMessage = responseData.message || 'Eroare necunoscută.';
+                        showToast(`Eroare la trimiterea ASIN-ului: ${errorMessage}`, 5000);
                     }
                 } catch (error) {
                     showToast('Eroare de rețea. Vă rugăm încercați din nou.', 5000);
