@@ -466,6 +466,42 @@ document.addEventListener('DOMContentLoaded', () => {
 
         pageElements.openModalButton.addEventListener('click', openModalFlow);
         pageElements.footerPrinterButton.addEventListener('click', openModalFlow);
+
+        const sendAsinButton = document.getElementById('send-asin-button');
+        if (sendAsinButton) {
+            sendAsinButton.addEventListener('click', async () => {
+                if (!currentProduct || !currentProduct.asin) {
+                    showToast('ASIN-ul produsului nu este disponibil.', 4000);
+                    return;
+                }
+
+                sendAsinButton.disabled = true;
+                sendAsinButton.textContent = 'Se trimite...';
+
+                try {
+                    const response = await fetch('https://automatizare.comandat.ro/webhook/0d803fb8-60b5-476c-9608-e198fcc9d2a0', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({ asin: currentProduct.asin }),
+                    });
+
+                    if (response.ok) {
+                        showToast('ASIN-ul a fost trimis cu succes!');
+                    } else {
+                        const errorData = await response.text();
+                        showToast(`Eroare la trimiterea ASIN-ului: ${errorData}`, 5000);
+                    }
+                } catch (error) {
+                    showToast('Eroare de rețea. Vă rugăm încercați din nou.', 5000);
+                    console.error('Eroare la trimiterea ASIN-ului:', error);
+                } finally {
+                    sendAsinButton.disabled = false;
+                    sendAsinButton.textContent = 'Trimite ASIN';
+                }
+            });
+        }
     }
     
     async function autoConnectToPrinter() {
