@@ -4,8 +4,9 @@ import { AppState } from './data.js';
 document.addEventListener('DOMContentLoaded', () => {
     const form = document.getElementById('add-product-form');
     const asinInput = document.getElementById('asin-input');
-    const countrySelect = document.getElementById('country-select'); // Adăugat
+    const countrySelect = document.getElementById('country-select');
     const commandSelect = document.getElementById('command-select');
+    const manifestskuInput = document.getElementById('manifestsku-input');
     const insertButton = document.getElementById('insert-button');
     const buttonText = insertButton.querySelector('.button-text');
     const buttonLoader = insertButton.querySelector('.button-loader');
@@ -38,11 +39,12 @@ document.addEventListener('DOMContentLoaded', () => {
         event.preventDefault();
         
         const asin = asinInput.value.trim();
-        const country = countrySelect.value; // Adăugat
+        const country = countrySelect.value;
         const orderId = commandSelect.value;
+        const manifestsku = manifestskuInput.value.trim();
 
-        if (!asin || !orderId || !country) { // Modificat
-            statusMessage.textContent = 'Te rugăm să completezi toate câmpurile.'; // Modificat
+        if (!asin || !orderId || !country || !manifestsku) {
+            statusMessage.textContent = 'Te rugăm să completezi toate câmpurile.';
             statusMessage.className = 'text-red-600 text-center text-sm font-medium';
             return;
         }
@@ -58,7 +60,8 @@ document.addEventListener('DOMContentLoaded', () => {
             const payload = {
                 asin: asin,
                 orderId: orderId,
-                country: country // Adăugat
+                country: country,
+                manifestsku: manifestsku
             };
 
             const response = await fetch(ADD_PRODUCT_WEBHOOK_URL, {
@@ -73,15 +76,18 @@ document.addEventListener('DOMContentLoaded', () => {
             
             const result = await response.json();
 
+            // --- MODIFICARE AICI ---
             if (result.status === 'success') {
-                statusMessage.textContent = 'Produsul a fost inserat cu succes!';
+                statusMessage.textContent = 'Produsul a fost importat cu succes.'; // Textul a fost schimbat
                 statusMessage.className = 'text-green-600 text-center text-sm font-medium';
-                asinInput.value = ''; // Golește câmpul ASIN
-                countrySelect.selectedIndex = 0; // Resetează selectul de țară
-                commandSelect.selectedIndex = 0; // Resetează selectul de comandă
+                asinInput.value = ''; 
+                countrySelect.selectedIndex = 0; 
+                commandSelect.selectedIndex = 0; 
+                manifestskuInput.value = ''; 
             } else {
                 throw new Error(result.message || 'Eroare necunoscută de la server.');
             }
+            // --- SFÂRȘIT MODIFICARE ---
 
         } catch (error) {
             console.error('Eroare la inserarea produsului:', error);
