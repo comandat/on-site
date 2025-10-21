@@ -4,6 +4,7 @@ import { AppState } from './data.js';
 document.addEventListener('DOMContentLoaded', () => {
     const form = document.getElementById('add-product-form');
     const asinInput = document.getElementById('asin-input');
+    const countrySelect = document.getElementById('country-select'); // Adăugat
     const commandSelect = document.getElementById('command-select');
     const insertButton = document.getElementById('insert-button');
     const buttonText = insertButton.querySelector('.button-text');
@@ -37,10 +38,11 @@ document.addEventListener('DOMContentLoaded', () => {
         event.preventDefault();
         
         const asin = asinInput.value.trim();
+        const country = countrySelect.value; // Adăugat
         const orderId = commandSelect.value;
 
-        if (!asin || !orderId) {
-            statusMessage.textContent = 'Te rugăm să completezi ambele câmpuri.';
+        if (!asin || !orderId || !country) { // Modificat
+            statusMessage.textContent = 'Te rugăm să completezi toate câmpurile.'; // Modificat
             statusMessage.className = 'text-red-600 text-center text-sm font-medium';
             return;
         }
@@ -55,7 +57,8 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             const payload = {
                 asin: asin,
-                orderId: orderId
+                orderId: orderId,
+                country: country // Adăugat
             };
 
             const response = await fetch(ADD_PRODUCT_WEBHOOK_URL, {
@@ -74,7 +77,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 statusMessage.textContent = 'Produsul a fost inserat cu succes!';
                 statusMessage.className = 'text-green-600 text-center text-sm font-medium';
                 asinInput.value = ''; // Golește câmpul ASIN
-                commandSelect.selectedIndex = 0; // Resetează selectul
+                countrySelect.selectedIndex = 0; // Resetează selectul de țară
+                commandSelect.selectedIndex = 0; // Resetează selectul de comandă
             } else {
                 throw new Error(result.message || 'Eroare necunoscută de la server.');
             }
