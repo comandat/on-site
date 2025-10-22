@@ -16,7 +16,9 @@ document.addEventListener('DOMContentLoaded', () => {
         container.innerHTML = '';
         commands.forEach(command => {
             const commandEl = document.createElement('a');
-            commandEl.href = 'products.html';
+            // --- START MODIFICARE ---
+            commandEl.href = 'pallets.html'; // Schimbăm destinația
+            // --- FINAL MODIFICARE ---
             commandEl.className = 'block rounded-lg bg-white p-4 shadow-sm transition-transform hover:scale-105 active:scale-95';
             
             commandEl.innerHTML = `
