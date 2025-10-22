@@ -86,15 +86,18 @@ document.addEventListener('DOMContentLoaded', () => {
                     return;
                 }
 
+                // --- START MODIFICARE ---
                 resultsContainer.innerHTML = filteredProducts.map(product => `
                     <div class="flex items-center gap-4 p-2 transition-colors rounded-lg cursor-pointer hover:bg-gray-100 search-result-item" data-command-id="${product.commandId}" data-product-id="${product.id}">
                         <img alt="${product.details.title}" class="h-12 w-12 rounded-md object-cover bg-gray-200" src="${product.details.images[0] || ''}" />
-                        <div class="flex-1">
+                        <div class="flex-1 min-w-0">
                             <p class="font-medium text-gray-900 line-clamp-2">${product.details.title}</p>
                             <p class="text-sm text-gray-500">Comanda: ${product.commandName.replace('Comanda #', '#')}</p>
+                            <p class="text-xs text-gray-400 font-mono truncate">${product.asin}</p>
                         </div>
                     </div>
                 `).join('');
+                // --- FINAL MODIFICARE ---
 
                 document.querySelectorAll('.search-result-item').forEach(item => {
                     item.addEventListener('click', () => {
