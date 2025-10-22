@@ -1,6 +1,10 @@
 // scripts/product-detail.js
 import { AppState, fetchDataAndSyncState, sendStockUpdate, fetchProductDetailsInBulk } from './data.js';
 
+// --- START MODIFICARE ---
+const TITLE_UPDATE_URL = 'https://automatizare.comandat.ro/webhook/0d61e5a2-2fb8-4219-b80a-a75999dd32fc';
+// --- FINAL MODIFICARE ---
+
 document.addEventListener('DOMContentLoaded', () => {
     let niimbotCharacteristic = null;
     let isConnecting = false;
@@ -16,6 +20,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const pageElements = {
         title: document.getElementById('product-detail-title'),
+        // --- START MODIFICARE ---
+        asin: document.getElementById('product-detail-asin'),
+        editTitleButton: document.getElementById('edit-title-button'),
+        // --- FINAL MODIFICARE ---
         expectedStock: document.getElementById('expected-stock'),
         suggestedCondition: document.getElementById('suggested-condition'),
         totalFound: document.getElementById('total-found'),
@@ -208,10 +216,18 @@ document.addEventListener('DOMContentLoaded', () => {
     
     async function renderProductDetails(productAsin) {
         pageElements.title.textContent = 'Se încarcă...';
+        // --- START MODIFICARE ---
+        pageElements.asin.textContent = '...';
+        // --- FINAL MODIFICARE ---
+        
         const details = await fetchProductDetailsInBulk([productAsin]);
         const productDetails = details[productAsin];
 
+        // --- START MODIFICARE ---
         pageElements.title.textContent = productDetails?.title || 'Nume indisponibil';
+        pageElements.asin.textContent = productAsin || 'ASIN indisponibil';
+        // --- FINAL MODIFICARE ---
+        
         const images = productDetails?.images || [];
         pageElements.imageWrapper.innerHTML = '';
 
@@ -232,6 +248,56 @@ document.addEventListener('DOMContentLoaded', () => {
             swiper = new Swiper('#image-swiper-container', { pagination: { el: '.swiper-pagination' } });
         }
     }
+
+    // --- START MODIFICARE ---
+    // Funcție nouă pentru gestionarea modificării titlului
+    async function handleTitleEdit() {
+        if (!currentProduct || !currentProduct.asin) {
+            showToast('Eroare: ASIN-ul produsului lipsește.');
+            return;
+        }
+
+        const currentTitle = pageElements.title.textContent;
+        const newTitle = prompt("Introduceți noul titlu:", currentTitle);
+
+        if (newTitle === null || newTitle.trim() === '' || newTitle.trim() === currentTitle) {
+            showToast('Modificare anulată.', 2000);
+            return;
+        }
+
+        pageElements.editTitleButton.disabled = true;
+        showToast('Se salvează noul titlu...');
+
+        try {
+            const response = await fetch(TITLE_UPDATE_URL, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    asin: currentProduct.asin,
+                    title: newTitle.trim()
+                })
+            });
+
+            if (!response.ok) throw new Error('Eroare de rețea la salvarea titlului.');
+
+            const result = await response.json();
+
+            if (result.status === 'success') {
+                // Șterge cache-ul pentru acest produs
+                sessionStorage.removeItem(`product_${currentProduct.asin}`);
+                // Reîncarcă pagina pentru a afișa noul titlu
+                window.location.reload();
+            } else {
+                throw new Error(result.message || 'Eroare de la server.');
+            }
+
+        } catch (error) {
+            console.error('Eroare la modificarea titlului:', error);
+            showToast(`Eroare: ${error.message}`, 4000);
+            pageElements.editTitleButton.disabled = false;
+        }
+    }
+    // --- FINAL MODIFICARE ---
 
     async function handleSaveChanges() {
         const saveButton = document.getElementById('save-btn');
@@ -466,6 +532,11 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         renderPageContent();
         await renderProductDetails(currentProduct.asin);
+        
+        // --- START MODIFICARE ---
+        // Atașează listener-ul pentru butonul de editare titlu
+        pageElements.editTitleButton.addEventListener('click', handleTitleEdit);
+        // --- FINAL MODIFICARE ---
         
         const openModalFlow = () => {
             if (!isPrinterConnected()) {
