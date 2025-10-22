@@ -36,7 +36,13 @@
             </div>
             
             <div class="p-4">
-                <h1 id="product-detail-title" class="mt-1 text-xl font-bold text-gray-900 leading-tight min-h-[2.75rem]">Încărcare...</h1>
+                <div class="flex items-start justify-between gap-2 mt-1">
+                    <h1 id="product-detail-title" class="text-xl font-bold text-gray-900 leading-tight min-h-[2.75rem] flex-1">Încărcare...</h1>
+                    <button id="edit-title-button" class="flex-shrink-0 h-10 w-10 flex items-center justify-center rounded-full text-gray-600 hover:bg-gray-200 active:bg-gray-300">
+                        <span class="material-symbols-outlined">edit</span>
+                    </button>
+                </div>
+                <p id="product-detail-asin" class="text-sm text-gray-500 font-mono min-h-[1.25rem]"></p>
                 <div id="combined-summary" class="mt-3 rounded-xl bg-white border border-gray-200 p-3 shadow-sm">
                     <div class="flex justify-between items-baseline bg-gray-50 p-2 rounded-lg">
                         <span class="font-semibold text-gray-600">Așteptat:</span>
@@ -100,4 +106,3 @@
 
 </body>
 </html>
-
