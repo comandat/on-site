@@ -220,3 +220,4 @@ export async function initProductsPage() {
 
     await renderProductsList(); // Apelăm funcția de randare
 }
+
