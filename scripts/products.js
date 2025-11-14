@@ -131,40 +131,12 @@ export async function initProductsPage() {
 
         // --- START MODIFICARE ---
         // Filtrăm produsele pe baza manifestSku-ului selectat
-        let filteredProducts = command.products.filter(p => {
+        const filteredProducts = command.products.filter(p => {
             if (manifestSku === 'No ManifestSKU') {
                 return !p.manifestsku; // Potrivire pentru cele nule sau goale
             }
             return p.manifestsku === manifestSku;
         });
-
-        // --- START MODIFICARE (Sortare) ---
-// --- START MODIFICARE (Sortare) ---
-        // Sortăm lista
-        filteredProducts.sort((a, b) => {
-            const aComplete = Number(a.found) >= Number(a.expected);
-            const bComplete = Number(b.found) >= Number(b.expected);
-
-            // 1. Logica principală: Produsele complete merg la final
-            const primarySort = aComplete - bComplete;
-            
-            if (primarySort !== 0) {
-                // Unul este complet și celălalt nu, deci sortarea principală se aplică
-                return primarySort; 
-            }
-
-            // 2. Logica secundară: Ambele sunt la fel (fie complete, fie incomplete)
-            
-            // Dacă ambele sunt INCOMPLETE (!aComplete este adevărat)
-            if (!aComplete) {
-                // Le sortăm descrescător după cantitatea 'expected'
-                return Number(b.expected) - Number(a.expected);
-            }
-            
-            // Altfel, ambele sunt complete. Nu se aplică o sortare suplimentară.
-            return 0;
-        });
-        // --- FINAL MODIFICARE (Sortare) ---
 
         if (filteredProducts.length === 0) {
             container.innerHTML = '<p class="p-4 text-center text-gray-500">Acest palet nu are produse.</p>';
@@ -190,13 +162,6 @@ export async function initProductsPage() {
             productEl.href = `#`; // Nu mai folosim href
             productEl.className = 'flex items-center gap-4 bg-white p-4 transition-colors hover:bg-gray-50';
             
-            // --- START MODIFICARE: Adăugăm o clasă pentru produsele complete ---
-            // Adăugăm un fundal verde pal și opacitate redusă pentru produsele complete
-            if (Number(product.found) >= Number(product.expected)) {
-                 productEl.className += ' bg-green-50 opacity-80';
-            }
-            // --- FINAL MODIFICARE ---
-
             productEl.innerHTML = `
                 <img alt="${productName}" class="h-14 w-14 rounded-md object-cover bg-gray-200" src="${imageUrl}" />
                 <div class="flex-1 min-w-0">
@@ -220,4 +185,3 @@ export async function initProductsPage() {
 
     await renderProductsList(); // Apelăm funcția de randare
 }
-

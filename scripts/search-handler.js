@@ -20,9 +20,11 @@ export function initSearchHandler(navigateTo) {
             sessionStorage.setItem('currentCommandId', commandId);
             sessionStorage.setItem('currentProductId', productId);
             
+            // --- START MODIFICARE ---
             // Folosim router-ul în loc de reload
             navigateTo('product-detail');
             closeSearch(); // Închidem overlay-ul după selecție
+            // --- FINAL MODIFICARE ---
         };
 
         openSearch = async () => {
@@ -91,6 +93,7 @@ export function initSearchHandler(navigateTo) {
                     return;
                 }
 
+                // --- START MODIFICARE ---
                 resultsContainer.innerHTML = filteredProducts.map(product => `
                     <div class="flex items-center gap-4 p-2 transition-colors rounded-lg cursor-pointer hover:bg-gray-100 search-result-item" data-command-id="${product.commandId}" data-product-id="${product.id}">
                         <img alt="${product.details.title}" class="h-12 w-12 rounded-md object-cover bg-gray-200" src="${product.details.images[0] || ''}" />
@@ -101,6 +104,7 @@ export function initSearchHandler(navigateTo) {
                         </div>
                     </div>
                 `).join('');
+                // --- FINAL MODIFICARE ---
 
                 document.querySelectorAll('.search-result-item').forEach(item => {
                     item.addEventListener('click', () => {
@@ -113,13 +117,32 @@ export function initSearchHandler(navigateTo) {
         };
 
         searchTriggerButton.addEventListener('click', openSearch);
+
+        // --- START MODIFICARE ---
+        // Logica de căutare URL este eliminată. Router-ul se ocupă de asta.
+        // --- FINAL MODIFICARE ---
     }
+    // --- END: Search functionality for product-detail.html ---
+
 
     // --- START: Redirection logic from other pages ---
-    // (Această logică a fost înlocuită de scanner-ul LPN, 
-    // dar o lăsăm aici pentru a gestiona căutarea declanșată din context)
-    // De fapt, o vom scoate pentru a nu crea confuzie. 
-    // Butonul de search din footer e acum scanner.
+    // Găsim TOATE butoanele de căutare din footer
+    const footerSearchButtons = document.querySelectorAll('#footer-search-trigger');
+    
+    footerSearchButtons.forEach(footerSearchButton => {
+        // Verificăm dacă suntem pe o pagină care NU are overlay-ul de căutare (adică nu e product-detail)
+        // Această verificare se face acum prin simpla prezență a butonului
+        if (footerSearchButton) {
+            footerSearchButton.addEventListener('click', (event) => {
+                event.preventDefault();
+                // --- START MODIFICARE ---
+                // Folosim router-ul pentru a naviga și a trimite contextul de "search"
+                navigateTo('product-detail', { search: true });
+                // --- FINAL MODIFICARE ---
+            });
+        }
+    });
+    // --- END: Redirection logic ---
     
     // Returnăm funcția openSearch pentru a fi folosită de router
     return openSearch;

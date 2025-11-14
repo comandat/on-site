@@ -5,16 +5,9 @@ import { initPalletsPage } from './pallets.js';
 import { initProductsPage } from './products.js';
 import { initProductDetailPage } from './product-detail.js';
 import { initAddProductPage } from './add-product.js';
-
-// --- START FIX: Am adăugat la loc import-urile ---
 import { initSearchHandler } from './search-handler.js';
-import { AppState } from './data.js';
-import { showToast } from './printer-handler.js';
-// --- FINAL FIX ---
 
-// --- START FIX: Am adăugat la loc openSearchFunction ---
 let openSearchFunction = () => {};
-// --- FINAL FIX ---
 let pages = {};
 
 /**
@@ -47,9 +40,7 @@ function navigateTo(pageId, context = {}) {
                 initProductsPage();
                 break;
             case 'product-detail':
-                // --- START FIX: Am adăugat la loc parametrul openSearchFunction ---
                 initProductDetailPage(context, openSearchFunction);
-                // --- FINAL FIX ---
                 break;
             case 'add-product':
                 initAddProductPage();
@@ -70,6 +61,8 @@ function navigateTo(pageId, context = {}) {
 function updateFooterActiveState(activePageId) {
     document.querySelectorAll('footer [data-nav]').forEach(button => {
         const page = button.dataset.nav;
+        const icon = button.querySelector('.material-symbols-outlined');
+        const text = button.querySelector('.text-xs');
 
         // Reset
         button.classList.remove('text-[var(--primary-color)]');
@@ -80,15 +73,11 @@ function updateFooterActiveState(activePageId) {
              button.classList.add('text-[var(--primary-color)]');
              button.classList.remove('text-gray-500', 'hover:text-[var(--primary-color)]');
         }
+        // Cazul special pentru comenzi/paleți/produse
         if (['commands', 'pallets', 'products', 'product-detail'].includes(activePageId) && page === 'commands') {
              button.classList.add('text-[var(--primary-color)]');
              button.classList.remove('text-gray-500', 'hover:text-[var(--primary-color)]');
         }
-    });
-    
-    document.querySelectorAll('#footer-scan-trigger').forEach(button => {
-        button.classList.remove('text-[var(--primary-color)]');
-        button.classList.add('text-gray-500', 'hover:text-[var(--primary-color)]');
     });
 }
 
@@ -111,177 +100,6 @@ export const router = {
     navigateTo
 };
 
-// --- Logica Scanner-ului LPN (Rămâne neschimbată) ---
-
-const SCAN_WEBHOOK_URL = 'https://automatizare.comandat.ro/webhook/find-product-by-lpn';
-let html5QrCode = null;
-
-async function onScanSuccess(decodedText, decodedResult) {
-    stopScanner();
-    showToast('Cod scanat. Se caută produsul...');
-    try {
-        const response = await fetch(`${SCAN_WEBHOOK_URL}?lpn=${decodedText}`, {
-            method: 'GET',
-        });
-        if (!response.ok) throw new Error('Eroare de rețea sau LPN negăsit.');
-        const productsData = await response.json();
-        
-        let productInfo = null;
-        if (Array.isArray(productsData) && productsData.length > 0 && productsData[0]["Product SKU"]) {
-            productInfo = productsData[0];
-        } else if (typeof productsData === 'object' && productsData !== null && !Array.isArray(productsData) && productsData["Product SKU"]) {
-            productInfo = productsData;
-        }
-
-        if (!productInfo) {
-            console.error("Produsul nu a fost găsit în răspunsul API (LPN invalid?):", productsData);
-            throw new Error('Produsul nu a fost găsit în API (LPN invalid?).');
-        }
-
-        const productSku = productInfo["Product SKU"];
-        const allCommands = AppState.getCommands();
-        let foundProduct = null;
-        let foundCommandId = null;
-
-        for (const command of allCommands) {
-            const product = command.products.find(p => p.id === productSku);
-            if (product) {
-                foundProduct = product;
-                foundCommandId = command.id;
-                break;
-            }
-        }
-
-        if (foundProduct && foundCommandId) {
-            sessionStorage.setItem('currentCommandId', foundCommandId);
-            sessionStorage.setItem('currentProductId', foundProduct.id);
-            sessionStorage.setItem('currentManifestSku', foundProduct.manifestsku || 'No ManifestSKU');
-            showToast('Produs găsit! Se deschide...');
-            router.navigateTo('product-detail');
-        } else {
-            showToast(`Produsul (SKU: ...${productSku.slice(-6)}) nu e în comenzile curente.`, 5000);
-            console.error('Produsul (SKU: ' + productSku + ') a fost găsit în API, dar nu există în comenzile încărcate în AppState.');
-        }
-    } catch (error) {
-        console.error('Eroare la procesarea LPN:', error);
-        showToast(error.message, 5000);
-    }
-}
-
-function onScanFailure(error) { /* Nu face nimic */ }
-
-// --- ÎNCEPUT MODIFICARE ---
-// Am înlocuit funcția startScanner cu versiunea async
-// care include logica de selecție a camerei "ultra".
-
-async function startScanner() {
-    const scannerContainer = document.getElementById('scanner-container');
-    if (!scannerContainer) return;
-    scannerContainer.classList.remove('hidden');
-    
-    if (!html5QrCode) {
-        html5QrCode = new Html5Qrcode("reader");
-    }
-
-    // --- Logică Selectare Cameră (adaptată din "storage") ---
-    let preferredCamId = { facingMode: "environment" }; // Fallback-ul default
-    const targetLabelUltra = "ultra";
-    const targetLabelSuper = "superangurlar"; // Păstrăm ortografia din celălalt repo
-
-    try {
-        // Folosim metoda specifică acestei biblioteci
-        const cameras = await Html5Qrcode.getCameras(); 
-        
-        console.log("--- Camere Disponibile (on-site) ---");
-        cameras.forEach((cam, index) => {
-            console.log(`[${index}]: ${cam.label} (ID: ${cam.id})`);
-        });
-        console.log("---------------------------");
-
-        if (cameras.length > 0) {
-            // 1. Căutăm "ultra"
-            let targetCamera = cameras.find(cam => 
-                cam.label.toLowerCase().includes(targetLabelUltra)
-            );
-
-            if (targetCamera) {
-                preferredCamId = targetCamera.id; // Folosim ID-ul camerei
-                console.log(`Găsit camera "ultra". Se folosește: ${targetCamera.label}`);
-            } else {
-                // 2. Căutăm "superangurlar"
-                targetCamera = cameras.find(cam => 
-                    cam.label.toLowerCase().includes(targetLabelSuper)
-                );
-                if (targetCamera) {
-                    preferredCamId = targetCamera.id; // Folosim ID-ul camerei
-                    console.log(`Găsit camera "superangurlar". Se folosește: ${targetCamera.label}`);
-                } else {
-                    // 3. Fallback: Căutăm ultima cameră de SPATE
-                    const rearCameras = cameras.filter(cam => 
-                        /rear|back|environment/i.test(cam.label) && 
-                        !/front|user/i.test(cam.label)
-                    );
-                    
-                    if (rearCameras.length > 0) {
-                        targetCamera = rearCameras[rearCameras.length - 1]; // Folosim ultima
-                        preferredCamId = targetCamera.id; // Folosim ID-ul camerei
-                        console.log(`Nicio cameră "ultra" sau "superangurlar" găsită. Fallback la ultima cameră spate: ${targetCamera.label}`);
-                    } else {
-                        // 4. Fallback final (se va folosi { facingMode: "environment" })
-                        console.log("Nicio cameră specifică găsită. Se folosește default 'environment'.");
-                    }
-                }
-            }
-        } else {
-             console.warn("Nicio cameră nu a fost găsită. Se folosește default 'environment'.");
-        }
-        
-    } catch (e) {
-        console.error("Eroare la listarea camerelor, se folosește default 'environment'.", e);
-    }
-    // --- Sfârșit Logică Selectare Cameră ---
-
-    const config = { fps: 10 };
-    
-    // Folosim ID-ul camerei preferate (string) sau obiectul de fallback
-    html5QrCode.start(preferredCamId, config, onScanSuccess, onScanFailure)
-        .catch(err => {
-            console.warn(`Camera preferată (${JSON.stringify(preferredCamId)}) nu a putut fi pornită, se încearcă camera default:`, err);
-            // Fallback la camera default (undefined)
-            html5QrCode.start(undefined, config, onScanSuccess, onScanFailure)
-                .catch(err2 => {
-                    console.error("Eroare la pornirea scannerului (și pe default):", err2);
-                    showToast("Nu s-a putut porni camera.", 3000);
-                    stopScanner();
-                });
-        });
-}
-// --- FINAL MODIFICARE ---
-
-function stopScanner() {
-    const scannerContainer = document.getElementById('scanner-container');
-    if (scannerContainer) scannerContainer.classList.add('hidden');
-    if (html5QrCode && html5QrCode.isScanning) {
-        html5QrCode.stop().catch(err => console.error("Eroare la oprirea scannerului:", err));
-    }
-}
-
-function initScannerHandler() {
-    const closeScannerButton = document.getElementById('close-scanner-button');
-    if (closeScannerButton) {
-        closeScannerButton.addEventListener('click', stopScanner);
-    }
-    document.body.addEventListener('click', (e) => {
-        const scanButton = e.target.closest('#footer-scan-trigger');
-        if (scanButton) {
-            e.preventDefault();
-            startScanner();
-        }
-    });
-}
-// --- Final Logica Scanner-ului ---
-
-
 // --- Inițializarea aplicației ---
 document.addEventListener('DOMContentLoaded', () => {
     // Colectează toate elementele paginii
@@ -291,11 +109,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Încearcă reconectarea automată la imprimantă
     autoConnectToPrinter();
-    
-    // --- START FIX: Inițializează AMBELE handlere ---
-    openSearchFunction = initSearchHandler(navigateTo); // Pentru Căutarea manuală
-    initScannerHandler(); // Pentru Scanner-ul LPN
-    // --- FINAL FIX ---
+
+    // Inițializează handler-ul de căutare (care returnează funcția openSearch)
+    openSearchFunction = initSearchHandler(navigateTo);
 
     // Adaugă listener global pentru butoanele de navigație [data-nav] (ex: footere)
     document.body.addEventListener('click', (e) => {
