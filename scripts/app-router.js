@@ -170,17 +170,84 @@ async function onScanSuccess(decodedText, decodedResult) {
 
 function onScanFailure(error) { /* Nu face nimic */ }
 
-function startScanner() {
+// --- ÎNCEPUT MODIFICARE ---
+// Am înlocuit funcția startScanner cu versiunea async
+// care include logica de selecție a camerei "ultra".
+
+async function startScanner() {
     const scannerContainer = document.getElementById('scanner-container');
     if (!scannerContainer) return;
     scannerContainer.classList.remove('hidden');
+    
     if (!html5QrCode) {
         html5QrCode = new Html5Qrcode("reader");
     }
+
+    // --- Logică Selectare Cameră (adaptată din "storage") ---
+    let preferredCamId = { facingMode: "environment" }; // Fallback-ul default
+    const targetLabelUltra = "ultra";
+    const targetLabelSuper = "superangurlar"; // Păstrăm ortografia din celălalt repo
+
+    try {
+        // Folosim metoda specifică acestei biblioteci
+        const cameras = await Html5Qrcode.getCameras(); 
+        
+        console.log("--- Camere Disponibile (on-site) ---");
+        cameras.forEach((cam, index) => {
+            console.log(`[${index}]: ${cam.label} (ID: ${cam.id})`);
+        });
+        console.log("---------------------------");
+
+        if (cameras.length > 0) {
+            // 1. Căutăm "ultra"
+            let targetCamera = cameras.find(cam => 
+                cam.label.toLowerCase().includes(targetLabelUltra)
+            );
+
+            if (targetCamera) {
+                preferredCamId = targetCamera.id; // Folosim ID-ul camerei
+                console.log(`Găsit camera "ultra". Se folosește: ${targetCamera.label}`);
+            } else {
+                // 2. Căutăm "superangurlar"
+                targetCamera = cameras.find(cam => 
+                    cam.label.toLowerCase().includes(targetLabelSuper)
+                );
+                if (targetCamera) {
+                    preferredCamId = targetCamera.id; // Folosim ID-ul camerei
+                    console.log(`Găsit camera "superangurlar". Se folosește: ${targetCamera.label}`);
+                } else {
+                    // 3. Fallback: Căutăm ultima cameră de SPATE
+                    const rearCameras = cameras.filter(cam => 
+                        /rear|back|environment/i.test(cam.label) && 
+                        !/front|user/i.test(cam.label)
+                    );
+                    
+                    if (rearCameras.length > 0) {
+                        targetCamera = rearCameras[rearCameras.length - 1]; // Folosim ultima
+                        preferredCamId = targetCamera.id; // Folosim ID-ul camerei
+                        console.log(`Nicio cameră "ultra" sau "superangurlar" găsită. Fallback la ultima cameră spate: ${targetCamera.label}`);
+                    } else {
+                        // 4. Fallback final (se va folosi { facingMode: "environment" })
+                        console.log("Nicio cameră specifică găsită. Se folosește default 'environment'.");
+                    }
+                }
+            }
+        } else {
+             console.warn("Nicio cameră nu a fost găsită. Se folosește default 'environment'.");
+        }
+        
+    } catch (e) {
+        console.error("Eroare la listarea camerelor, se folosește default 'environment'.", e);
+    }
+    // --- Sfârșit Logică Selectare Cameră ---
+
     const config = { fps: 10 };
-    html5QrCode.start({ facingMode: "environment" }, config, onScanSuccess, onScanFailure)
+    
+    // Folosim ID-ul camerei preferate (string) sau obiectul de fallback
+    html5QrCode.start(preferredCamId, config, onScanSuccess, onScanFailure)
         .catch(err => {
-            console.warn("Camera 'environment' nu a putut fi pornită, se încearcă camera default:", err);
+            console.warn(`Camera preferată (${JSON.stringify(preferredCamId)}) nu a putut fi pornită, se încearcă camera default:`, err);
+            // Fallback la camera default (undefined)
             html5QrCode.start(undefined, config, onScanSuccess, onScanFailure)
                 .catch(err2 => {
                     console.error("Eroare la pornirea scannerului (și pe default):", err2);
@@ -189,6 +256,7 @@ function startScanner() {
                 });
         });
 }
+// --- FINAL MODIFICARE ---
 
 function stopScanner() {
     const scannerContainer = document.getElementById('scanner-container');
